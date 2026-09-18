@@ -1,0 +1,70 @@
+{
+  "name": "ecommerce-mfe-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-Ready Micro Frontend E-Commerce Platform built with Webpack 5 Module Federation, React, Zustand, and Express",
+  "workspaces": [
+    "apps/*",
+    "libs/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n \"API,PRODUCT,CART,GATEWAY\" -c \"cyan,blue,magenta,green\" \"npm run dev -w @ecommerce/api\" \"npm run dev -w @ecommerce/mfe-product\" \"npm run dev -w @ecommerce/mfe-cart\" \"npm run dev -w @ecommerce/gateway\"",
+    "dev:api": "npm run dev -w @ecommerce/api",
+    "dev:product": "npm run dev -w @ecommerce/mfe-product",
+    "dev:cart": "npm run dev -w @ecommerce/mfe-cart",
+    "dev:gateway": "npm run dev -w @ecommerce/gateway",
+    "build": "npm run build -w @ecommerce/api && npm run build -w @ecommerce/mfe-product && npm run build -w @ecommerce/mfe-cart && npm run build -w @ecommerce/gateway",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint \"apps/**/*.{ts,tsx}\" \"libs/**/*.{ts,tsx}\" --max-warnings=0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.0.1",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/supertest": "^6.0.2",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "concurrently": "^9.1.0",
+    "css-loader": "^7.1.2",
+    "dotenv-webpack": "^8.1.0",
+    "eslint": "^8.57.1",
+    "html-webpack-plugin": "^5.6.3",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "style-loader": "^4.0.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.6.3",
+    "webpack": "^5.96.1",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^5.1.0"
+  },
+  "keywords": [
+    "micro-frontends",
+    "module-federation",
+    "webpack5",
+    "react",
+    "zustand",
+    "monorepo",
+    "ecommerce"
+  ],
+  "author": "Nisum MFE Training",
+  "license": "MIT"
+}

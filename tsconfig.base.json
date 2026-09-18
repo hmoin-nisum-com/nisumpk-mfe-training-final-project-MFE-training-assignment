@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "jsx": "react-jsx",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["jest", "@testing-library/jest-dom", "node", "react", "react-dom"],
+    "baseUrl": ".",
+    "paths": {
+      "@ecommerce/shared-types": ["libs/shared-types/src/index.ts"],
+      "@ecommerce/shared-ui": ["libs/shared-ui/src/index.ts"],
+      "@ecommerce/events": ["libs/events/src/index.ts"],
+      "@ecommerce/state": ["libs/state/src/index.ts"],
+      "@ecommerce/utilities": ["libs/utilities/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "dist"]
+}

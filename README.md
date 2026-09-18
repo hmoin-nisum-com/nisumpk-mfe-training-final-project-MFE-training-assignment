@@ -1,1535 +1,588 @@
-# 🚀 Final Project — Build a Production-Ready Micro Frontend Platform
+# 🛒 Production-Ready E-Commerce Micro Frontend Platform
 
-## 📌 Overview
-
-This is the **Final Project for the Micro Frontend (MFE) Training**.
-
-In this project, you will design and build a complete Micro Frontend-based application that demonstrates the concepts covered throughout the training.
-
-The goal is to move beyond building individual MFEs and demonstrate how multiple independently developed applications can work together as a **complete, scalable, and maintainable application**.
-
-Your solution must demonstrate:
-
-- Micro Frontend architecture
-- Module Federation
-- Monorepo architecture
-- Gateway / Shell application
-- Multiple independently structured MFEs
-- Shared/global state
-- Event-driven communication
-- Browser-based event listeners and emitters
-- Data sharing between MFEs
-- Server-side/backend integration
-- CI/CD pipeline
-- Testing
-- Documentation
-- Production-oriented architecture
-
-> **Important:** This is a final project. You are expected to make architectural decisions yourself and explain why you chose them.
-
-The objective is not only to make the application work, but to demonstrate that you understand **how and why Micro Frontends should communicate, share state, and be independently developed and deployed.**
+[![CI Pipeline](https://github.com/NisumPK/nisumpk-mfe-training-final-project-MFE-training-assignment/actions/workflows/ci.yml/badge.svg)](https://github.com/NisumPK/nisumpk-mfe-training-final-project-MFE-training-assignment/actions/workflows/ci.yml)
+[![Node.js Version](https://img.shields.io/badge/node-v20%20%7C%20v22-brightgreen.svg)](https://nodejs.org)
+[![Webpack](https://img.shields.io/badge/Module%20Federation-Webpack%205-blue.svg)](https://webpack.js.org/concepts/module-federation/)
+[![React](https://img.shields.io/badge/React-18.3.1-61dafb.svg)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)](https://www.typescriptlang.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-# 🎯 Learning Objectives
+## Overview
 
-By completing this project, you should be able to:
+This project is the **Final Project for the Micro Frontend (MFE) Training at Nisum**. It implements a complete, enterprise-grade, scalable **E-Commerce Platform** following **Scenario 1** and strictly complying with all **24 Important Rules** defined in the training specifications.
 
-1. Design a complete Micro Frontend architecture.
-2. Build multiple independent MFEs.
-3. Implement a Gateway/Shell application.
-4. Configure and use Module Federation.
-5. Build an Nx or equivalent monorepo architecture.
-6. Create reusable shared libraries.
-7. Implement global state management.
-8. Implement event-driven communication between MFEs.
-9. Use browser-based events for cross-MFE communication.
-10. Implement a reusable event emitter/listener abstraction.
-11. Share data between independent MFEs.
-12. Build and integrate a server-side/backend application.
-13. Handle communication between frontend and backend services.
-14. Implement automated testing.
-15. Create a CI/CD pipeline.
-16. Understand the trade-offs of shared state versus event-driven communication.
-17. Design an architecture that can scale beyond two MFEs.
-18. Document architectural decisions and technical challenges.
+The platform demonstrates how independently developed, tested, and deployable frontend applications work harmoniously within a unified user experience using **Webpack 5 Module Federation**, a **monorepo workspace**, **Zustand shared global state**, an event-driven **`window.NISUM` event bus**, a resilient **Express REST API backend**, and automated **CI/CD pipelines**.
 
 ---
 
-# 🏗️ Project Requirements
+## Business Scenario
 
-Your project must contain **at least two Micro Frontends** and **one Gateway/Shell application**.
+### Scenario 1 — E-Commerce Retail Platform
 
-You may create additional MFEs if your chosen business scenario requires them.
+The business scenario models a modern multi-category electronic and accessory storefront:
 
-### Minimum Architecture
+1. **Gateway / Shell (Host - Port `4200`)**: Acts as the customer-facing orchestrator. Provides responsive layout, navigation between views, currency switching, customer profile badge, dynamic remote loading with error boundaries, and centralized toast notifications.
+2. **Product Catalog MFE (Remote - Port `4201`)**: Owned by the Catalog Team. Provides interactive product discovery with category filtering, keyword search, inventory indicators, and dynamic price conversion. When an item is purchased, it triggers decoupled events via `window.NISUM` and updates global state.
+3. **Shopping Cart MFE (Remote - Port `4202`)**: Owned by the Checkout & Orders Team. Consumes cross-MFE events, calculates line totals, taxes, discounts, and shipping fees, syncs cart updates with the backend REST API, and executes the final checkout order creation.
+4. **Backend API Service (Express - Port `3000`)**: Provides authoritative RESTful endpoints for catalog data, server-persisted cart state, order placement transactions, and health checks.
+
+---
+
+## Architecture
+
+The platform adopts a **Runtime Composition Architecture** with loose coupling between services:
+
+- **Host-Remote Topology**: The Gateway acts as the Module Federation Host. Remotes (`mfe-product` and `mfe-cart`) expose self-contained components compiled into `remoteEntry.js` bundles loaded dynamically at runtime.
+- **Shared Dependency Singletons**: Core libraries (`react`, `react-dom`, `zustand`, `@ecommerce/*`) are configured as shared singletons across federation boundaries, ensuring zero duplicate React runtimes and shared memory space for global stores.
+- **Fault-Tolerant Fallbacks**: Every remote import is protected by a `RemoteBoundary` containing an `ErrorBoundary` and `Suspense` fallback. If a remote service crashes or experiences network failure, the Shell remains responsive and displays a localized retry control without breaking the rest of the application.
+- **Dual-Channel Communication**:
+  - **Shared Reactive State**: For persistent, synchronous application-level data (currency selection, active user session, cart total counter).
+  - **Event-Driven Communication**: For asynchronous cross-boundary notifications (`cart:item-added`, `cart:updated`, `order:created`, `notification:show`) through standard browser CustomEvents.
+
+---
+
+## Architecture Diagram
 
 ```text
-                         ┌──────────────────────┐
-                         │    Gateway / Shell   │
-                         │       (Host)         │
-                         └───────────┬──────────┘
-                                     │
-                          Module Federation
-                                     │
-                    ┌────────────────┴────────────────┐
-                    │                                 │
-             ┌──────▼──────┐                   ┌──────▼──────┐
-             │    MFE 1    │                   │    MFE 2    │
-             │             │                   │             │
-             │  Provider   │                   │  Provider   │
-             └─────────────┘                   └─────────────┘
-```
-
-### Minimum Requirements
-
-You must have:
-
-- **1 Gateway/Shell**
-- **At least 2 MFEs**
-- **1 server-side/backend application**
-- **1 monorepo/workspace**
-- **Module Federation**
-- **Global state**
-- **Event-driven communication**
-- **Data-sharing mechanisms**
-- **CI/CD pipeline**
-
----
-
-# 💡 Part 1 — Choose Your Application Scenario
-
-You may choose any meaningful business domain.
-
-Your application should represent a realistic system where Micro Frontends provide a meaningful architectural advantage.
-
----
-
-## 🛒 Example Scenario 1 — E-Commerce
-
-```text
-                    E-Commerce Gateway
-                           │
-             ┌─────────────┼─────────────┐
-             │             │             │
-             ▼             ▼             ▼
-          Product        Cart         Checkout
-           MFE            MFE            MFE
-             │             │             │
-             └─────────────┼─────────────┘
-                           │
-                           ▼
-                      Backend API
-```
-
-Possible MFEs:
-
-- Product Catalog
-- Shopping Cart
-- Checkout
-- User Profile
-- Order Management
-- Payments
-
----
-
-# 🏦 Example Scenario 2 — Banking Application
-
-```text
-                      Banking Gateway
-                            │
-              ┌─────────────┼─────────────┐
-              │             │             │
-              ▼             ▼             ▼
-           Accounts     Transactions    Payments
-              MFE           MFE            MFE
-              │             │              │
-              └─────────────┼──────────────┘
-                            │
-                            ▼
-                       Banking API
-```
-
-Possible MFEs:
-
-- Account Dashboard
-- Transactions
-- Payments
-- Beneficiaries
-- Profile
-
----
-
-# 🎓 Example Scenario 3 — Learning Platform
-
-```text
-                       LMS Gateway
-                            │
-              ┌─────────────┼─────────────┐
-              │             │             │
-              ▼             ▼             ▼
-           Courses      Assignments     Grades
-              MFE           MFE            MFE
-              │             │              │
-              └─────────────┼──────────────┘
-                            │
-                            ▼
-                         LMS API
+                               ┌──────────────────────────────────────────────┐
+                               │           Gateway / Shell (Host)             │
+                               │          Webpack 5 DevServer :4200           │
+                               │  - Layout Shell & Global Navigation          │
+                               │  - Currency Selector & Toast System          │
+                               │  - Remote Fallback Error Boundaries          │
+                               └──────────────┬────────────────┬──────────────┘
+                                              │                │
+                             Module Federation│                │Module Federation
+                             (remoteEntry.js) │                │(remoteEntry.js)
+                                              ▼                ▼
+                     ┌───────────────────────────┐  ┌───────────────────────────┐
+                     │   Product Catalog MFE     │  │     Shopping Cart MFE     │
+                     │  Remote / Standalone :4201│  │  Remote / Standalone :4202│
+                     │  Exposes: ./ProductList   │  │  Exposes: ./CartView      │
+                     │                           │  │           ./CartBadge     │
+                     └─────────────┬─────────────┘  └─────────────┬─────────────┘
+                                   │                              │
+                                   │  NISUM.emit('cart:item-added')│ NISUM.listener(...)
+                                   └──────────────┐        ┌──────┘
+                                                  ▼        ▼
+                                        ┌─────────────────────────┐
+                                        │    Global Event Bus     │
+                                        │      window.NISUM       │
+                                        │  (Browser CustomEvents) │
+                                        └─────────────────────────┘
+                                                  ▲        ▲
+                                                  │        │
+                                        ┌─────────┴────────┴────────┐
+                                        │    Shared Global State    │
+                                        │    @ecommerce/state       │
+                                        │     (Zustand Store)       │
+                                        └───────────────────────────┘
+                                                  │        │
+                                                  ▼        ▼
+                                        ┌───────────────────────────┐
+                                        │      Backend REST API     │
+                                        │        Express :3000      │
+                                        │  /api/products  /api/cart │
+                                        │  /api/orders    /api/health│
+                                        └───────────────────────────┘
 ```
 
 ---
 
-# 📊 Example Scenario 4 — Enterprise Dashboard
+## Technologies Used
 
-```text
-                    Enterprise Gateway
-                            │
-             ┌──────────────┼──────────────┐
-             │              │              │
-             ▼              ▼              ▼
-          Analytics        Users         Reports
-             MFE            MFE            MFE
-```
-
----
-
-# 🧩 Part 2 — Gateway / Shell Application
-
-The Gateway/Shell is the main entry point of your application.
-
-It must:
-
-- Act as the Module Federation Host.
-- Load the remote MFEs.
-- Provide the overall application layout.
-- Provide navigation.
-- Handle loading states.
-- Handle remote loading failures.
-- Display the appropriate MFE based on navigation.
-- Provide access to global/shared state where appropriate.
-- Provide a consistent application shell.
-
-Example:
-
-```text
-┌─────────────────────────────────────────────┐
-│                 Application                  │
-├──────────────┬──────────────────────────────┤
-│              │                              │
-│ Dashboard    │                              │
-│ Products     │       Remote MFE             │
-│ Cart         │                              │
-│ Orders       │                              │
-│ Profile      │                              │
-│              │                              │
-└──────────────┴──────────────────────────────┘
-```
+| Layer | Technology | Purpose |
+|---|---|---|
+| **Micro Frontend Federation** | Webpack 5 `ModuleFederationPlugin` | Runtime module composition, dependency sharing, and independent deployment |
+| **Frontend Framework** | React 18.3 (`react`, `react-dom`) | Component-based UI with hooks and lazy loading |
+| **Language & Typing** | TypeScript 5.6 | Strict type safety and shared interfaces across apps and libs |
+| **State Management** | Zustand 4.5 | Lightweight reactive store shared as a singleton across MFEs |
+| **Event System** | `window.NISUM` (Browser CustomEvents) | Loosely coupled pub/sub cross-MFE communication |
+| **Backend Server** | Node.js + Express 4.21 | RESTful APIs for catalog, persistent cart, and orders |
+| **Monorepo Architecture** | npm Workspaces + Nx | Workspace orchestration, centralized scripts, path aliases |
+| **Styling & Design System** | Modern Vanilla CSS & CSS Tokens | Glassmorphism, tailored HSL color tokens, dark mode accents |
+| **Testing** | Jest 29 + React Testing Library + Supertest | Unit, component, integration, and API testing |
+| **CI/CD** | GitHub Actions (`.github/workflows/ci.yml`) | Automated build, test, lint, and type checking pipeline |
 
 ---
 
-# 🧩 Part 3 — Micro Frontends
-
-You must create at least **two independent MFEs**.
-
-Each MFE should have a clearly defined business responsibility.
-
-For example:
+## Project Structure
 
 ```text
-MFE 1 → Product Management
-MFE 2 → Shopping Cart
-```
-
-or:
-
-```text
-MFE 1 → Accounts
-MFE 2 → Transactions
-```
-
-### Each MFE should:
-
-- Have its own application boundary.
-- Have clearly defined responsibilities.
-- Be independently runnable.
-- Be consumed by the Gateway.
-- Communicate with other MFEs only through defined mechanisms.
-- Avoid unnecessary direct dependencies on other MFEs.
-
----
-
-# 🔗 Part 4 — Module Federation
-
-Module Federation is a **mandatory requirement**.
-
-The Gateway must consume the MFEs through Module Federation.
-
-Expected architecture:
-
-```text
-                    Gateway / Host
-                          │
-                          │
-                Module Federation
-                          │
-              ┌───────────┴───────────┐
-              │                       │
-              ▼                       ▼
-          Remote MFE 1            Remote MFE 2
-```
-
-### Requirements
-
-- Gateway must be the Host.
-- MFEs must be Remotes.
-- MFEs must expose modules/components/pages.
-- Gateway must consume the exposed modules.
-- Remote applications must remain independently runnable.
-- MFEs must not simply be copied into the Gateway.
-- Remote modules must be loaded at runtime.
-
----
-
-# 🗂️ Part 5 — Monorepo Architecture
-
-The complete project must exist inside a **single workspace/monorepo**.
-
-Nx is recommended.
-
-Example:
-
-```text
-final-mfe-project/
-│
+nisumpk-mfe-training-final-project-MFE-training-assignment/
 ├── apps/
-│   ├── gateway/
-│   ├── mfe-product/
-│   ├── mfe-cart/
-│   └── api/
+│   ├── gateway/                      # Shell / Host application (Port 4200)
+│   │   ├── public/index.html
+│   │   ├── src/
+│   │   │   ├── components/           # RemoteBoundary, ToastContainer, ArchitectureView
+│   │   │   ├── App.tsx               # Main shell layout with remote lazy loading
+│   │   │   ├── bootstrap.tsx         # Host bootstrap mount
+│   │   │   ├── index.ts              # Async Module Federation entry
+│   │   │   ├── App.test.tsx          # Gateway unit/component test suite
+│   │   │   └── decls.d.ts            # Remote module TS declarations
+│   │   ├── webpack.config.js         # Host federation config
+│   │   └── tsconfig.json
+│   │
+│   ├── mfe-product/                  # Product Catalog MFE (Port 4201)
+│   │   ├── public/index.html
+│   │   ├── src/
+│   │   │   ├── components/           # ProductList, ProductCard
+│   │   │   ├── exposes/              # ProductListExport exposed to federation
+│   │   │   ├── App.tsx               # Standalone development container
+│   │   │   ├── bootstrap.tsx         # Standalone root mount
+│   │   │   ├── index.ts              # Async Module Federation entry
+│   │   │   └── ProductCard.test.tsx  # Product catalog component test suite
+│   │   ├── webpack.config.js         # Remote federation config exposing ./ProductList
+│   │   └── tsconfig.json
+│   │
+│   ├── mfe-cart/                     # Shopping Cart MFE (Port 4202)
+│   │   ├── public/index.html
+│   │   ├── src/
+│   │   │   ├── components/           # CartView, CartBadge
+│   │   │   ├── exposes/              # CartViewExport, CartBadgeExport
+│   │   │   ├── App.tsx               # Standalone development container
+│   │   │   ├── bootstrap.tsx         # Standalone root mount
+│   │   │   ├── index.ts              # Async Module Federation entry
+│   │   │   └── CartView.test.tsx     # Cart component test suite
+│   │   ├── webpack.config.js         # Remote federation config exposing ./CartView, ./CartBadge
+│   │   └── tsconfig.json
+│   │
+│   └── api/                          # Express Backend API Service (Port 3000)
+│       ├── src/
+│       │   ├── data/                 # In-memory product catalog seed
+│       │   ├── routes/               # products.ts, cart.ts, orders.ts, health.ts
+│       │   ├── index.ts              # Server bootstrap and CORS middleware
+│       │   └── api.test.ts           # Supertest API endpoint tests
+│       └── tsconfig.json
 │
 ├── libs/
-│   ├── shared-types/
-│   ├── shared-ui/
-│   ├── state/
-│   ├── events/
-│   └── utilities/
+│   ├── shared-types/                 # Universal TypeScript contracts
+│   │   └── src/index.ts              # Product, CartItem, Order, NisumEventMap, etc.
+│   ├── shared-ui/                    # Reusable Design System components
+│   │   ├── src/
+│   │   │   ├── components/           # Button, Card, Badge, Loader, ErrorBoundary, Toast
+│   │   │   ├── styles/tokens.css     # CSS custom property design tokens
+│   │   │   └── index.ts
+│   ├── events/                       # window.NISUM Event Engine
+│   │   ├── src/
+│   │   │   ├── index.ts              # NISUM.emit, NISUM.listener implementation
+│   │   │   └── index.test.ts         # Event bus unit tests
+│   ├── state/                        # Shared reactive Zustand store
+│   │   ├── src/
+│   │   │   ├── index.ts              # useAppStore singleton hook and actions
+│   │   │   └── index.test.ts         # Store unit tests
+│   └── utilities/                    # Formatters, HTTP client, environment readers
+│       ├── src/
+│       │   ├── index.ts              # formatCurrency, getEnv, fetchJson
+│       │   └── index.test.ts         # Utilities unit tests
 │
 ├── .github/
 │   └── workflows/
-│
-├── package.json
-├── nx.json
-├── tsconfig.base.json
-└── README.md
-```
-
-You may use a different structure if you clearly document your architecture.
-
----
-
-# 📦 Part 6 — Shared Libraries
-
-Create reusable libraries where appropriate.
-
-At minimum, you should consider creating:
-
-```text
-shared-types
-shared-ui
-state
-events
-```
-
-### Shared Types
-
-Define common interfaces/types in one place.
-
-Example:
-
-```typescript
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-}
-```
-
-Avoid duplicating common types across MFEs.
-
----
-
-# 🎨 Shared UI
-
-Create reusable components where appropriate.
-
-Examples:
-
-```text
-Button
-Card
-Modal
-Input
-Loader
-ErrorBoundary
-```
-
-Shared UI should contain generic/reusable components rather than business-specific components.
-
----
-
-# 🌐 Part 7 — Global Event System
-
-Your application must implement a reusable global event system using the browser `window` object.
-
-The goal is to allow MFEs to communicate without directly importing each other's internal implementation.
-
-The expected API should look similar to:
-
-```typescript
-NISUM.listener("eventName", handler);
-
-NISUM.emit("eventName", {
-  // event data
-});
-```
-
-You may implement this using a custom event system built on top of:
-
-```text
-window
-CustomEvent
-addEventListener
-dispatchEvent
+│       └── ci.yml                    # Automated GitHub Actions CI workflow
+├── package.json                      # Monorepo workspaces and unified scripts
+├── tsconfig.base.json                # Shared compiler options & path mappings
+├── tsconfig.json                     # Root project reference
+├── nx.json                           # Workspace metadata
+├── jest.config.js                    # Monorepo Jest test configuration
+├── jest.setup.ts                     # DOM matchers setup
+├── .eslintrc.json                    # ESLint rule configuration
+├── .env.example                      # Environment variables template
+└── README.md                         # Complete project documentation
 ```
 
 ---
 
-# 📡 Required Event API
-
-Your implementation must provide functionality similar to:
-
-```typescript
-NISUM.emit("cart:item-added", {
-  productId: "123",
-  quantity: 1,
-});
-```
-
-and:
-
-```typescript
-NISUM.listener("cart:item-added", (data) => {
-  console.log(data);
-});
-```
-
-You may choose the exact implementation, but the API should be:
-
-- Reusable
-- Type-safe where possible
-- Accessible across MFEs
-- Attached to the global `window` object
-- Properly documented
-
----
-
-# 🔄 Event-Driven Communication
-
-Demonstrate actual communication between at least **two MFEs using the event system**.
-
-Example:
-
-```text
-Product MFE
-     │
-     │ NISUM.emit()
-     ▼
-   Window
-     │
-     │ Custom Event
-     ▼
- Cart MFE
-     │
-     │ NISUM.listener()
-     ▼
- Update Cart
-```
-
-Example event:
-
-```text
-cart:item-added
-```
-
-Possible events include:
-
-```text
-user:login
-user:logout
-cart:item-added
-cart:item-removed
-cart:updated
-product:selected
-order:created
-notification:show
-```
-
-You should choose events that make sense for your application.
-
----
-
-# 🧠 Part 8 — Global State
-
-Your application must implement a **global/shared state** mechanism.
-
-You may use a suitable state management solution such as:
-
-- Redux Toolkit
-- Zustand
-- Another justified solution
-
-The state should contain meaningful application-level information.
-
-For example:
-
-```typescript
-{
-  user: {
-    id: "123",
-    name: "John"
-  },
-
-  cart: {
-    items: [],
-    totalItems: 0,
-    totalPrice: 0
-  }
-}
-```
-
----
-
-# 🔄 State Sharing
-
-Demonstrate actual state sharing between MFEs.
-
-Example:
-
-```text
-                   Global State
-                       │
-             ┌─────────┴─────────┐
-             │                   │
-             ▼                   ▼
-        Product MFE          Cart MFE
-             │                   │
-          dispatch()         selector()
-```
-
-The shared state must represent a real application requirement.
-
-Do not create global state simply for demonstration purposes without using it meaningfully.
-
----
-
-# ⚖️ Part 9 — State Sharing vs Event Sharing
-
-Your project must demonstrate **both**:
-
-### Global/Shared State
-
-Use shared state when multiple MFEs need access to persistent application state.
-
-Example:
-
-```text
-Current User
-Cart State
-Application Preferences
-```
-
-### Event-Driven Sharing
-
-Use events for communication where one MFE needs to notify another MFE that something happened.
-
-Example:
-
-```text
-Product Added
-Order Created
-User Logged Out
-Notification Requested
-```
-
----
-
-# 📊 Data-Sharing Requirements
-
-Your application must demonstrate different data-sharing approaches.
-
-At minimum, explain and demonstrate where appropriate:
-
-```text
-1. Global / Shared State
-2. Event-Driven Communication
-3. Module Federation Shared Modules
-4. Browser APIs / Storage where applicable
-5. Backend/API communication
-```
-
-You do not need to force every mechanism into the application.
-
-Instead, explain:
-
-- Why you selected a mechanism.
-- Where you used it.
-- Why it was appropriate.
-- What alternatives you considered.
-- What limitations it has.
-
----
-
-# 🖥️ Part 10 — Server-Side / Backend Application
-
-Your final project must include a **server-side application**.
-
-The frontend MFEs should communicate with the backend through APIs.
-
-Example:
-
-```text
-                    Gateway
-                       │
-              ┌────────┴────────┐
-              │                 │
-              ▼                 ▼
-          Product MFE       Cart MFE
-              │                 │
-              └────────┬────────┘
-                       │
-                       ▼
-                   Backend API
-                       │
-                       ▼
-                    Database
-```
-
-The backend may be implemented using a technology appropriate to your project.
-
-Examples:
-
-- Node.js
-- Express
-- NestJS
-- Spring Boot
-- Another justified backend technology
-
----
-
-# 🔌 Backend Requirements
-
-The backend should expose meaningful APIs.
-
-For example:
-
-```text
-GET    /api/products
-GET    /api/products/:id
-POST   /api/cart
-PUT    /api/cart/:id
-DELETE /api/cart/:id
-```
-
-Your actual APIs will depend on your selected application scenario.
-
-At minimum:
-
-- Frontend must communicate with the backend.
-- Backend must return meaningful data.
-- API errors must be handled.
-- Loading states must be handled.
-- Environment-specific configuration should be supported.
-
----
-
-# 🔐 Part 11 — Environment Configuration
-
-Do not hardcode environment-specific URLs.
-
-Use environment variables/configuration for values such as:
-
-```text
-API_URL
-REMOTE_MFE_URL
-AUTH_URL
-```
-
-For example:
-
-```text
-.env
-.env.development
-.env.production
-```
-
-Do not commit secrets or credentials to the repository.
-
----
-
-# 🧪 Part 12 — Testing
-
-Your project must contain automated tests.
-
-At minimum, include tests for:
+## Applications
 
 ### Gateway
+- **Role**: Module Federation Host running on port `4200`.
+- **Responsibilities**:
+  - Dynamically loads `mfe_product/ProductList`, `mfe_cart/CartView`, and `mfe_cart/CartBadge` using runtime URLs.
+  - Houses the top application bar with brand mark, user profile pill, and live navigation switcher (`Catalog`, `Shopping Cart`, `Architecture & Health`).
+  - Provides a global currency dropdown connected directly to `@ecommerce/state`.
+  - Integrates `ToastContainer` listening to cross-MFE `notification:show` events.
+  - Wraps remote modules in `RemoteBoundary` to prevent cascading failures.
 
-- Gateway renders.
-- Navigation works.
-- Remote MFE loading works.
-- Loading state is displayed.
-- Error state is handled.
+### MFE 1: Product Catalog (`mfe-product`)
+- **Role**: Remote application running on port `4201`.
+- **Exposed Module**: `./ProductList` (`ProductListExport.tsx`).
+- **Responsibilities**:
+  - Fetches catalog data from the Backend API (`GET /api/products`).
+  - Provides category filtering (All, Audio, Wearables, Electronics, Accessories) and real-time search.
+  - Renders pricing formatted dynamically according to global store currency (`USD`, `EUR`, `GBP`).
+  - On clicking "Add to Cart":
+    1. Emits `cart:item-added` via `window.NISUM.emit()`.
+    2. Emits `notification:show` via `window.NISUM.emit()`.
+    3. Increments shared cart counter in `@ecommerce/state`.
+- **Standalone Execution**: Run independently at `http://localhost:4201`.
 
-### MFE 1
+### MFE 2: Shopping Cart (`mfe-cart`)
+- **Role**: Remote application running on port `4202`.
+- **Exposed Modules**: `./CartView` (`CartViewExport.tsx`), `./CartBadge` (`CartBadgeExport.tsx`).
+- **Responsibilities**:
+  - Subscribes to `cart:item-added` via `window.NISUM.listener()` and cleans up listener on unmount.
+  - Renders line items, supports quantity modification (+ / -) and deletion.
+  - Calculates subtotal, sales tax (8%), conditional free shipping (> $100), and VIP member discounts (> $200).
+  - Syncs changes with Backend API (`POST /api/cart`, `PUT /api/cart/:id`, `DELETE /api/cart/:id`).
+  - Emits `order:created` and `notification:show` upon order checkout completion.
+- **Standalone Execution**: Run independently at `http://localhost:4202`.
 
-- Main functionality works.
-- Components render correctly.
-- API interaction works.
-- Required events are emitted.
-
-### MFE 2
-
-- Main functionality works.
-- Components render correctly.
-- Required events are received.
-- State updates correctly.
-
-### Global Event System
-
-Test:
-
-```text
-NISUM.emit()
-NISUM.listener()
-```
-
-Verify that:
-
-- Events are emitted.
-- Events are received.
-- Payloads are passed correctly.
-- Listeners can be registered.
-- Listeners can be removed/unsubscribed.
-
-### Global State
-
-Test:
-
-- State initialization.
-- State updates.
-- State consumption from MFEs.
-
----
-
-# 🚦 Part 13 — Error Handling
-
-Your application must handle common failure scenarios.
-
-At minimum demonstrate:
-
-- Remote MFE unavailable.
-- Backend unavailable.
-- API error.
-- Loading state.
-- Invalid data.
-- Event listener cleanup.
-
-Example:
-
-```text
-Gateway
-   │
-   ├── Remote Available
-   │       ↓
-   │    Render MFE
-   │
-   └── Remote Unavailable
-           ↓
-      Error Boundary
-           ↓
-    "Unable to load module"
-```
+### Backend Service (`api`)
+- **Role**: RESTful API service running on port `3000`.
+- **Responsibilities**:
+  - `GET /api/products`: Retrieves catalog with optional category and search query parameters.
+  - `GET /api/products/:id`: Retrieves individual product specifications.
+  - `GET /api/cart`: Returns current server cart summary.
+  - `POST /api/cart`: Adds an item to the persistent cart.
+  - `PUT /api/cart/:id`: Modifies item quantity.
+  - `DELETE /api/cart/:id`: Deletes single cart item.
+  - `DELETE /api/cart`: Clears cart upon order placement.
+  - `POST /api/orders`: Validates cart items, generates order ID, and confirms order.
+  - `GET /api/health`: Provides service uptime and status for architecture monitoring.
 
 ---
 
-# 🔄 Part 14 — CI/CD Pipeline
+## Module Federation
 
-Implement a CI/CD pipeline for your project.
+Module Federation is implemented using Webpack 5's native `ModuleFederationPlugin`.
 
-GitHub Actions is recommended.
+### Gateway Host Configuration (`apps/gateway/webpack.config.js`)
+```javascript
+new ModuleFederationPlugin({
+  name: 'gateway',
+  remotes: {
+    mfe_product: `mfe_product@${MFE_PRODUCT_URL}/remoteEntry.js`,
+    mfe_cart: `mfe_cart@${MFE_CART_URL}/remoteEntry.js`
+  },
+  shared: {
+    react: { singleton: true, requiredVersion: '^18.3.1', eager: false },
+    'react-dom': { singleton: true, requiredVersion: '^18.3.1', eager: false },
+    zustand: { singleton: true, eager: false },
+    '@ecommerce/shared-types': { singleton: true, eager: false },
+    '@ecommerce/shared-ui': { singleton: true, eager: false },
+    '@ecommerce/events': { singleton: true, eager: false },
+    '@ecommerce/state': { singleton: true, eager: false },
+    '@ecommerce/utilities': { singleton: true, eager: false }
+  }
+})
+```
 
-Your pipeline should automatically run when code is pushed or a Pull Request is created.
+### Remote MFE Configuration (`apps/mfe-product/webpack.config.js`)
+```javascript
+new ModuleFederationPlugin({
+  name: 'mfe_product',
+  filename: 'remoteEntry.js',
+  exposes: {
+    './ProductList': './src/exposes/ProductListExport'
+  },
+  shared: { /* same singletons */ }
+})
+```
 
-Minimum pipeline stages:
-
-```text
-Git Push / Pull Request
-          │
-          ▼
-     Install Dependencies
-          │
-          ▼
-       Lint / Check
-          │
-          ▼
-       Run Tests
-          │
-          ▼
-        Build Apps
-          │
-          ▼
-     Deployment
+### Remote MFE Configuration (`apps/mfe-cart/webpack.config.js`)
+```javascript
+new ModuleFederationPlugin({
+  name: 'mfe_cart',
+  filename: 'remoteEntry.js',
+  exposes: {
+    './CartView': './src/exposes/CartViewExport',
+    './CartBadge': './src/exposes/CartBadgeExport'
+  },
+  shared: { /* same singletons */ }
+})
 ```
 
 ---
 
-# ⚙️ CI Requirements
+## Monorepo Architecture
 
-Your CI pipeline should perform at least:
+The monorepo uses standard **npm Workspaces** integrated with TypeScript base paths (`tsconfig.base.json`):
+- `apps/*`: Application entry points (`gateway`, `mfe-product`, `mfe-cart`, `api`).
+- `libs/*`: Reusable libraries (`shared-types`, `shared-ui`, `events`, `state`, `utilities`).
 
-- Dependency installation.
-- Linting.
-- Type checking where applicable.
-- Automated tests.
-- Production build.
-
-Example:
-
-```text
-.github/
-└── workflows/
-    └── ci.yml
-```
+Benefits:
+- Single dependency installation via `npm install`.
+- Code changes in `libs/*` are instantly reflected across all applications without requiring premature publishing to an npm registry.
+- Standardized tooling: single ESLint configuration, single Jest runner, and unified CI pipeline.
 
 ---
 
-# 🚀 CD Requirements
+## Shared Libraries
 
-Implement deployment automation where possible.
-
-You may deploy your applications using any suitable platform.
-
-For example:
-
-```text
-Gateway
-   ↓
-Production Hosting
-
-MFE 1
-   ↓
-Production Hosting
-
-MFE 2
-   ↓
-Production Hosting
-
-Backend
-   ↓
-Cloud / Server
-```
-
-The Gateway should be configured to consume the deployed Remote MFEs.
-
-If deployment is not possible, your README must clearly document how the CD pipeline would work in a production environment.
+1. **`@ecommerce/shared-types`**:
+   Universal TypeScript interfaces (`Product`, `CartItem`, `Order`, `AppNotification`, `NisumEventMap`). Eliminates drift between MFEs and the backend.
+2. **`@ecommerce/shared-ui`**:
+   Clean design system components (`Button`, `Card`, `Badge`, `Loader`, `ErrorBoundary`, `Toast`) and global CSS design tokens (`tokens.css`).
+3. **`@ecommerce/events`**:
+   The `window.NISUM` event engine providing `emit()` and `listener()`.
+4. **`@ecommerce/state`**:
+   The shared Zustand store providing reactive currency, cart item count, active view, and user session data.
+5. **`@ecommerce/utilities`**:
+   Common utilities including `formatCurrency()`, `getEnv()`, and resilient `fetchJson()` with HTTP error parsing.
 
 ---
 
-# 📈 Part 15 — Independent Deployment
+## Global State
 
-Your architecture should support the idea that MFEs can be deployed independently.
-
-For example:
-
-```text
-Gateway       → Version 1.0
-Product MFE   → Version 1.4
-Cart MFE      → Version 2.1
-Backend       → Version 3.0
-```
-
-Explain:
-
-- How Remote URLs are configured.
-- How the Gateway discovers Remotes.
-- What happens when a Remote is unavailable.
-- How you would handle version compatibility.
+Implemented using **Zustand** shared as a Module Federation singleton:
+- **State Properties**:
+  - `currency`: Selected currency (`USD`, `EUR`, `GBP`).
+  - `exchangeRates`: Conversion ratios.
+  - `cartCount`: Real-time total count of items in cart.
+  - `user`: Authenticated customer profile (`Alex Morgan`, `Gold VIP`).
+  - `activeView`: Currently displayed view tab (`products`, `cart`, `architecture`).
+  - `toasts`: Active notification queue.
+- **Why Zustand?**
+  Zustand provides a lightweight, hook-based API with zero boilerplate, full TypeScript safety, and outside-React store access (`getState()`, `setState()`). Because Module Federation shares it as a singleton, all MFEs and the Gateway access the exact same store instance in browser memory.
 
 ---
 
-# 🔍 Part 16 — Architecture Documentation
+## Event-Driven Architecture
 
-Your README must contain:
-
-```text
-## Architecture
-```
-
-Include an architecture diagram showing:
-
-```text
-Gateway
-   │
-   ├── MFE 1
-   │
-   ├── MFE 2
-   │
-   ├── Shared State
-   │
-   ├── Event System
-   │
-   └── Backend
-```
-
-Explain the responsibility of every major application and library.
+Cross-MFE communication uses loose coupling with browser-based events:
+- MFEs never directly import each other's internal files.
+- The emitting MFE publishes an event onto the event bus without caring which components or remotes are currently listening.
+- If a listening MFE is not mounted, events fail silently without breaking execution.
 
 ---
 
-# 📊 Part 17 — Data-Sharing Comparison
+## NISUM Event System
 
-Create a section:
+Attached to the global `window.NISUM` object, satisfying **Important Rules 11 and 12**:
 
-```text
+### Event API
+```typescript
+// Emitting an event
+NISUM.emit('cart:item-added', {
+  product: productData,
+  quantity: 1,
+  timestamp: Date.now()
+});
+
+// Registering a listener (returns cleanup function)
+const unsubscribe = NISUM.listener('cart:item-added', (data) => {
+  console.log('Item added payload:', data);
+});
+
+// Unsubscribing (e.g., in React useEffect cleanup)
+unsubscribe();
+```
+
+### Supported Core Events
+- `cart:item-added`: Emitted by `mfe-product`, consumed by `mfe-cart`.
+- `cart:updated`: Emitted by `mfe-cart` on quantity changes or deletions.
+- `order:created`: Emitted by `mfe-cart` on successful checkout.
+- `notification:show`: Emitted across all MFEs, consumed by Gateway `ToastContainer`.
+- `currency:changed`: Emitted when global currency switches.
+
+---
+
 ## Data-Sharing Strategy
-```
-
-Compare the approaches used in your project.
-
-Example:
 
 | Mechanism | Used For | Coupling | Persistence | Advantages | Limitations |
 |---|---|---|---|---|---|
-| Shared State | Application state | Higher | Runtime | Easy state access | Increased coupling |
-| Events | Cross-MFE communication | Low | Runtime | Loosely coupled | Harder to trace |
-| Module Federation | Runtime modules | Medium | Runtime | Independent deployment | Configuration complexity |
-| Browser Storage | Persistent client data | Low | Persistent | Survives refresh | Browser-specific |
-| Backend API | Server data | Low | Server | Central source of truth | Network dependency |
-
-Expand this table with your own implementation decisions.
+| **Shared State (Zustand)** | Currency preferences, user session, cart total badge count | Medium | Runtime (in-memory) | Instant reactivity across MFEs; single source of truth | Requires singleton module sharing via federation |
+| **Event System (`window.NISUM`)** | Cross-MFE notifications (`cart:item-added`, `notification:show`) | Low | Ephemeral | Completely decoupled; standard DOM `CustomEvent` | Not persistent; requires listener active before dispatch |
+| **Module Federation** | Runtime composition of remote views (`ProductList`, `CartView`) | Medium | Runtime | Independent deployment; on-demand script chunk loading | Configuration complexity; network latency on first load |
+| **Backend REST API** | Catalog data, persistent cart items, order transactions | Low | Server-side | Authoritative persistence; business logic and security | Network latency; requires backend availability |
+| **Browser Storage** | User local preferences fallback | Low | Persistent | Survives page refresh across browser sessions | Client-specific; manual synchronization needed |
 
 ---
 
-# 🧪 Part 18 — Application Demonstration
+## Backend/API
 
-Your final demonstration must show the complete application working.
+The Express backend runs on port `3000` with CORS enabled for `http://localhost:4200`, `http://localhost:4201`, and `http://localhost:4202`.
 
-At minimum demonstrate:
-
-### 1. Gateway
-
-```text
-Gateway starts
-       ↓
-Loads MFEs
-       ↓
-Application is usable
-```
-
-### 2. Module Federation
-
-Show that the Gateway is consuming Remote MFEs.
-
-### 3. Global State
-
-Show:
-
-```text
-MFE 1
- ↓
-Global State
- ↓
-MFE 2
-```
-
-### 4. Event System
-
-Show:
-
-```text
-NISUM.emit()
-      ↓
-window
-      ↓
-NISUM.listener()
-      ↓
-Other MFE
-```
-
-### 5. Backend
-
-Show frontend → API → backend communication.
-
-### 6. CI/CD
-
-Show the CI/CD pipeline successfully running.
+### Endpoints
+- `GET /api/products`: Returns product list. Supports `?category=Audio` and `?search=webcam`.
+- `GET /api/products/:id`: Returns single product details.
+- `GET /api/cart`: Returns server cart state with calculated tax, shipping, and totals.
+- `POST /api/cart`: Adds product to cart. Body: `{ productId, name, price, quantity, image, category }`.
+- `PUT /api/cart/:id`: Updates quantity of an item. Body: `{ quantity }`.
+- `DELETE /api/cart/:id`: Removes item from cart.
+- `DELETE /api/cart`: Clears cart items.
+- `POST /api/orders`: Submits order transaction. Body: `{ items, totalAmount, currency, customer }`.
+- `GET /api/health`: Health status endpoint returning uptime and service version.
 
 ---
 
-# 📸 Part 19 — Screenshots / Demo Video
+## Error Handling
 
-Include screenshots or a short demo video showing:
-
-- Overall application.
-- Gateway/Shell.
-- MFE 1.
-- MFE 2.
-- Module Federation configuration.
-- Monorepo structure.
-- Global state.
-- Event emitter/listener.
-- Backend/API communication.
-- CI pipeline.
-- Deployment/CD pipeline if available.
+1. **Remote Loading Failures**:
+   If a remote MFE is unreachable, `RemoteBoundary` catches the dynamic import error and displays a clear message (e.g., `"Unable to load Remote Micro Frontend: mfe-product"`) with a "Retry Loading" button. The Gateway host and other MFEs continue functioning normally.
+2. **Backend Unavailability**:
+   Frontend components catch HTTP errors, display user-friendly error cards, and offer "Retry Fetch" buttons.
+3. **Event Listener Cleanup**:
+   All event listeners registered with `NISUM.listener()` return an unregister callback executed in React `useEffect` cleanups, preventing memory leaks and duplicate handler invocations.
 
 ---
 
-# 📁 Expected Repository Structure
+## Testing
 
-A recommended repository structure is:
+The project includes an automated test suite across all applications and shared libraries:
 
-```text
-final-mfe-project/
-│
-├── apps/
-│   ├── gateway/
-│   ├── mfe-one/
-│   ├── mfe-two/
-│   └── api/
-│
-├── libs/
-│   ├── shared-ui/
-│   ├── shared-types/
-│   ├── state/
-│   ├── events/
-│   └── utilities/
-│
-├── .github/
-│   └── workflows/
-│       ├── ci.yml
-│       └── cd.yml
-│
-├── README.md
-├── package.json
-├── nx.json
-├── tsconfig.base.json
-└── ...
+```bash
+npm test
 ```
 
-You may change the structure based on your architecture.
+### Test Suites Included:
+- **`libs/events` (`index.test.ts`)**: Verifies `NISUM.emit()`, `NISUM.listener()`, payload delivery, unregister cleanup, and event history recording.
+- **`libs/state` (`index.test.ts`)**: Verifies Zustand store initialization, currency updates, cart counter clamping, and toast management.
+- **`libs/utilities` (`index.test.ts`)**: Verifies currency formatting in USD, EUR, GBP, and environment variable fallbacks.
+- **`apps/api` (`api.test.ts`)**: Supertest integration tests verifying `/api/health`, `/api/products` (filtering & search), cart CRUD operations, and `/api/orders`.
+- **`apps/mfe-product` (`ProductCard.test.tsx`)**: Verifies product card rendering, price formatting, and clicking "Add to Cart" emits `cart:item-added` and updates store.
+- **`apps/mfe-cart` (`CartView.test.tsx`)**: Verifies empty cart rendering, receiving `cart:item-added` events, and displaying line items and totals.
+- **`apps/gateway` (`App.test.tsx`)**: Verifies Gateway shell rendering, view switching, and currency selection.
 
 ---
 
-# ▶️ Part 20 — Running the Application
+## CI/CD
 
-The entire project must be easy to start.
+Automated CI is implemented using **GitHub Actions** in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-The preferred requirement is:
+### Pipeline Stages:
+1. **Checkout Code**: Checks out repository.
+2. **Setup Node.js**: Matrix testing across Node.js `20.x` and `22.x`.
+3. **Install Dependencies**: Runs `npm ci`.
+4. **Linting**: Runs `npm run lint` (`eslint --max-warnings=0`).
+5. **Type Checking**: Runs `npm run type-check` (`tsc --noEmit`).
+6. **Automated Tests**: Runs `npm test -- --coverage`.
+7. **Production Builds**: Compiles and bundles all MFEs and backend (`npm run build`).
+
+---
+
+## Environment Configuration
+
+Configuration is managed through environment variables without hardcoded URLs:
+
+| Variable | Default Value | Description |
+|---|---|---|
+| `PORT` | `3000` | Backend API port |
+| `API_URL` | `http://localhost:3000` | URL for backend REST API |
+| `GATEWAY_PORT` | `4200` | Gateway Host port |
+| `MFE_PRODUCT_URL` | `http://localhost:4201` | Product Catalog MFE URL |
+| `MFE_CART_URL` | `http://localhost:4202` | Shopping Cart MFE URL |
+| `CORS_ORIGIN` | `http://localhost:4200,...` | Allowed CORS origins for API |
+
+Copy template to create local config:
+```bash
+cp .env.example .env
+```
+
+---
+
+## Running the Application
+
+### Prerequisites
+- Node.js `v20.x` or `v22.x`
+- npm `v10.x` or higher
+
+### Single-Command Startup (Rule 7)
+Install dependencies and launch all 4 services concurrently with a single command:
 
 ```bash
 npm install
 npm run dev
 ```
 
-or:
+This starts:
+- ✓ **Backend API**: [http://localhost:3000](http://localhost:3000)
+- ✓ **Product Catalog MFE**: [http://localhost:4201](http://localhost:4201)
+- ✓ **Shopping Cart MFE**: [http://localhost:4202](http://localhost:4202)
+- ✓ **Gateway Shell (Main Entry)**: [http://localhost:4200](http://localhost:4200)
 
+### Individual App Scripts
 ```bash
-npx nx run-many --target=serve --all
-```
-
-The goal is to allow the complete application to start with **a single command**.
-
-If your architecture requires another command, document it clearly.
-
-For example:
-
-```bash
-npm run dev
-```
-
-should start:
-
-```text
-Gateway
-MFE 1
-MFE 2
-Backend
-```
-
-Example:
-
-```text
-Starting applications...
-
-✓ Gateway       http://localhost:4200
-✓ MFE One       http://localhost:4201
-✓ MFE Two       http://localhost:4202
-✓ Backend       http://localhost:3000
-
-Application ready.
+npm run dev:gateway    # Starts Gateway Host only (Port 4200)
+npm run dev:product    # Starts Product MFE only (Port 4201)
+npm run dev:cart       # Starts Cart MFE only (Port 4202)
+npm run dev:api        # Starts Backend API only (Port 3000)
 ```
 
 ---
-
-# 📦 Part 21 — Expected Deliverables
-
-Your GitHub repository must contain:
-
-- [ ] Gateway/Shell application.
-- [ ] Minimum 2 Micro Frontends.
-- [ ] Backend/server-side application.
-- [ ] Monorepo/workspace configuration.
-- [ ] Module Federation configuration.
-- [ ] Runtime MFE composition.
-- [ ] Shared/global state.
-- [ ] Event emitter/listener system.
-- [ ] `window.NISUM` implementation.
-- [ ] Event-driven communication between MFEs.
-- [ ] Shared types where appropriate.
-- [ ] Shared libraries where appropriate.
-- [ ] Backend API integration.
-- [ ] Error handling.
-- [ ] Loading states.
-- [ ] Automated tests.
-- [ ] CI pipeline.
-- [ ] CD/deployment configuration or documented deployment strategy.
-- [ ] Complete README.
-- [ ] Architecture diagram.
-- [ ] Data-sharing strategy.
-- [ ] Architecture decisions.
-- [ ] Screenshots/demo.
-
----
-
-# 📝 README Requirements
-
-Your project README must contain the following sections:
-
-```text
-# Project Title
-
-## Overview
-
-## Business Scenario
-
-## Architecture
-
-## Architecture Diagram
-
-## Technologies Used
-
-## Project Structure
-
-## Applications
-
-### Gateway
-
-### MFE 1
-
-### MFE 2
-
-### Backend
-
-## Module Federation
-
-## Monorepo Architecture
-
-## Shared Libraries
-
-## Global State
-
-## Event-Driven Architecture
-
-## NISUM Event System
-
-## Data-Sharing Strategy
-
-## Backend/API
-
-## Error Handling
-
-## Testing
-
-## CI/CD
-
-## Environment Configuration
-
-## Running the Application
 
 ## Deployment
 
+### Independent Deployment Strategy
+In production, each MFE is packaged and deployed independently:
+1. **Remotes Deployment (`mfe-product`, `mfe-cart`)**:
+   - Bundled via `npm run build -w @ecommerce/mfe-product`.
+   - Assets and `remoteEntry.js` uploaded to CDN / S3 bucket with CORS headers enabled.
+   - Example URLs: `https://cdn.example.com/mfe-product/remoteEntry.js`.
+2. **Gateway Deployment (`gateway`)**:
+   - Reads remote entry URLs from environment variables (`MFE_PRODUCT_URL`, `MFE_CART_URL`) at build or runtime.
+   - Deployed to modern hosting (Vercel, AWS CloudFront, Nginx).
+3. **Backend API**:
+   - Containerized or deployed to cloud app services (AWS ECS, Render, Railway).
+4. **Zero Downtime Updates**:
+   Because the Gateway dynamically loads `remoteEntry.js` on user requests, updates to `mfe-product` or `mfe-cart` are immediately consumed by users on page load without requiring a redeployment or restart of the Gateway Shell.
+
+---
+
 ## Architecture Decisions
+
+### ADR 1: Webpack 5 Module Federation as Core Federation Technology
+- **Context**: Need runtime composition of independent React micro frontends.
+- **Decision**: Used Webpack 5 `ModuleFederationPlugin`.
+- **Rationale**: Industry standard for enterprise micro frontends, robust singleton dependency sharing (`react`, `react-dom`, `zustand`), and dynamic remote loading at runtime.
+
+### ADR 2: Browser CustomEvents for Asynchronous Cross-MFE Communication
+- **Context**: Need decoupled communication where Product MFE notifies Cart MFE.
+- **Decision**: Implemented `window.NISUM` event bus using browser `CustomEvent`.
+- **Rationale**: MFEs remain completely agnostic of each other. No direct package imports between MFEs, preventing tight coupling.
+
+### ADR 3: Zustand for Reactive Shared Application State
+- **Context**: Currency, active user session, and cart total badge count need synchronous reactive sharing across the Gateway and MFEs.
+- **Decision**: Configured `@ecommerce/state` with Zustand shared as a singleton module.
+- **Rationale**: Minimal footprint (< 2KB), works seamlessly across Module Federation boundaries, and allows components to re-render only when selected state slices change.
+
+### ADR 4: Centralized Error Boundaries per Remote MFE
+- **Context**: A failure in one remote must not crash the entire application.
+- **Decision**: Created `RemoteBoundary` wrapping each `React.lazy()` import.
+- **Rationale**: Isolates failures. If the Cart MFE is temporarily down, the customer can still browse the product catalog and view architecture diagnostics.
+
+---
 
 ## Challenges & Solutions
 
+1. **Challenge: TypeScript path resolution across monorepo packages**
+   - *Problem*: Webpack `ts-loader` threw `TS6059` when importing shared types and components outside the application's root directory.
+   - *Solution*: Configured `tsconfig.base.json` with universal path aliases (`@ecommerce/*`) and included `libs/**/*` in the application tsconfigs while omitting restrictive `rootDir` definitions.
+2. **Challenge: Cross-MFE React singleton collision**
+   - *Problem*: In Module Federation, multiple instances of React loaded by host and remotes can cause "Invalid hook call" errors.
+   - *Solution*: Configured `react` and `react-dom` as `{ singleton: true, requiredVersion: '^18.3.1', eager: false }` in all Module Federation plugins, ensuring a single shared React instance in browser memory.
+3. **Challenge: Event listener memory leaks**
+   - *Problem*: Component re-renders could register duplicate listeners on `window`.
+   - *Solution*: `NISUM.listener()` returns an unsubscribe function called in `useEffect` cleanups.
+
+---
+
 ## Screenshots / Demo
+
+### 1. Gateway Shell & Product Catalog (MFE 1)
+- Host header with branding, user profile, currency selector, and cart badge.
+- Interactive catalog loaded from `mfe-product` with category filter buttons and "Add to Cart" actions.
+
+### 2. Shopping Cart (MFE 2) & Checkout
+- Cart items dynamically added via `window.NISUM` events.
+- Order summary with subtotal, tax, free shipping, and checkout receipt.
+
+### 3. Architecture & Health Inspector
+- Built-in live topology dashboard showing active host and remotes.
+- Real-time `window.NISUM` event stream log and data-sharing strategy comparison matrix.
+
+---
 
 ## Future Improvements
 
+1. **Server-Side Rendering (SSR)**: Implement Next.js or Module Federation SSR for enhanced SEO on product detail pages.
+2. **Client-Side Cache Layer**: Integrate React Query or SWR in shared utilities for optimistic UI updates.
+3. **Advanced Telemetry**: Centralized OpenTelemetry tracing across Gateway, MFEs, and Backend API.
+
+---
+
 ## Conclusion
-```
 
----
-
-# 🚨 Important Rules
-
-1. The project must contain at least **2 MFEs**.
-2. The project must contain a **Gateway/Shell**.
-3. Module Federation is mandatory.
-4. MFEs must be independently structured.
-5. MFEs must be composed at runtime.
-6. The entire project must exist inside a single monorepo/workspace.
-7. The application must be startable with a single command.
-8. A server-side/backend application is mandatory.
-9. Global/shared state must be implemented.
-10. Event-driven communication must be implemented.
-11. The event system must be accessible through the global `window` object.
-12. The implementation must provide functionality similar to:
-   ```text
-   NISUM.emit("eventName", data)
-   NISUM.listener("eventName", handler)
-   ```
-13. At least two MFEs must communicate using the event system.
-14. At least two MFEs must demonstrate meaningful shared/global state usage.
-15. Do not directly access another MFE's internal implementation.
-16. Do not copy remote MFE source code into the Gateway.
-17. API URLs and environment-specific configuration must not be hardcoded.
-18. Do not commit secrets or credentials.
-19. Automated tests are mandatory.
-20. CI pipeline is mandatory.
-21. Code should be clean, modular, and maintainable.
-22. Architectural decisions must be documented.
-23. The project must include a working demonstration.
-24. Any deviations from these requirements must be clearly documented.
-
----
-
-# ⭐ Bonus Requirements
-
-The following features can earn additional credit.
-
-## Bonus 1 — Third MFE
-
-Create a third MFE with a meaningful business responsibility.
-
-```text
-Gateway
- ├── MFE 1
- ├── MFE 2
- └── MFE 3
-```
-
----
-
-## Bonus 2 — Authentication
-
-Implement authentication and demonstrate how authentication information is shared between MFEs.
-
----
-
-## Bonus 3 — Independent Deployment
-
-Deploy:
-
-```text
-Gateway
-MFE 1
-MFE 2
-Backend
-```
-
-independently.
-
----
-
-## Bonus 4 — Docker
-
-Containerize the applications.
-
-```text
-docker-compose.yml
-```
-
-should be able to start the complete system.
-
----
-
-## Bonus 5 — Cross-Tab Communication
-
-Use browser APIs to synchronize information between browser tabs.
-
----
-
-## Bonus 6 — Observability
-
-Add meaningful:
-
-- Logging
-- Error tracking
-- Application health checks
-
----
-
-## Bonus 7 — Feature Flags
-
-Implement feature flags that control MFE functionality.
-
----
-
-## Bonus 8 — Automated Deployment
-
-Configure the CI/CD pipeline to automatically deploy successful builds to a hosting environment.
-
----
-
-# 📊 Evaluation Criteria
-
-| Category | Marks |
-|---|---:|
-| MFE Architecture | 10 |
-| Gateway / Shell | 5 |
-| Module Federation | 15 |
-| Monorepo Architecture | 10 |
-| MFE 1 | 5 |
-| MFE 2 | 5 |
-| Global / Shared State | 10 |
-| Event-Driven Communication | 10 |
-| NISUM Event System | 5 |
-| Backend / Server-Side | 10 |
-| Testing | 5 |
-| CI/CD | 5 |
-| Documentation & Architecture Decisions | 5 |
-| **Total** | **100** |
-
-### Bonus
-
-Additional bonus marks may be awarded for:
-
-- Third MFE
-- Independent deployment
-- Authentication
-- Docker
-- Observability
-- Feature flags
-- Automated deployment
-- Other well-justified production-oriented improvements
-
----
-
-# 📝 Final Submission Checklist
-
-Before submitting your project, verify:
-
-### Architecture
-
-- [ ] Gateway/Shell exists.
-- [ ] At least 2 MFEs exist.
-- [ ] MFEs have clearly defined responsibilities.
-- [ ] Architecture diagram is included.
-- [ ] Monorepo is configured.
-
-### Module Federation
-
-- [ ] Gateway is the Host.
-- [ ] MFEs are Remotes.
-- [ ] Remote modules are exposed.
-- [ ] Gateway consumes Remote modules.
-- [ ] Runtime composition works.
-
-### Shared State
-
-- [ ] Global/shared state is implemented.
-- [ ] Multiple MFEs consume shared state.
-- [ ] State updates work correctly.
-- [ ] Shared state is used meaningfully.
-
-### Event System
-
-- [ ] Global event system is implemented.
-- [ ] Event system is attached to `window`.
-- [ ] `NISUM.emit()` works.
-- [ ] `NISUM.listener()` works.
-- [ ] Events contain meaningful payloads.
-- [ ] Multiple MFEs communicate through events.
-- [ ] Event listeners are cleaned up appropriately.
-
-### Backend
-
-- [ ] Backend application exists.
-- [ ] Frontend communicates with backend.
-- [ ] APIs return meaningful data.
-- [ ] API errors are handled.
-- [ ] Loading states are handled.
-- [ ] Environment configuration is implemented.
-
-### Testing
-
-- [ ] Unit/component tests exist.
-- [ ] Event system is tested.
-- [ ] Shared state is tested.
-- [ ] Important MFE functionality is tested.
-
-### CI/CD
-
-- [ ] CI pipeline exists.
-- [ ] Dependencies are installed automatically.
-- [ ] Lint/type checks run.
-- [ ] Tests run automatically.
-- [ ] Applications build successfully.
-- [ ] CD/deployment strategy is documented or implemented.
-
-### Documentation
-
-- [ ] README is complete.
-- [ ] Architecture is documented.
-- [ ] Data-sharing strategy is documented.
-- [ ] Architecture decisions are documented.
-- [ ] Challenges and solutions are documented.
-- [ ] Screenshots/demo are included.
-- [ ] Running instructions are documented.
-
----
-
-# 🎓 Final Goal
-
-The purpose of this project is **not simply to build another web application**.
-
-The objective is to demonstrate that you can design and implement a complete application using **Micro Frontend architecture**.
-
-Your final application should demonstrate the complete journey:
-
-```text
-                     ┌──────────────────────┐
-                     │    Gateway / Shell   │
-                     │        Host          │
-                     └──────────┬───────────┘
-                                │
-                         Module Federation
-                                │
-                ┌───────────────┼───────────────┐
-                │               │               │
-                ▼               ▼               ▼
-             MFE 1           MFE 2           MFE 3
-                │               │               │
-                └───────────────┼───────────────┘
-                                │
-                   ┌────────────┴────────────┐
-                   │                         │
-                   ▼                         ▼
-             Global State              Event System
-                   │                         │
-                   │                    window.NISUM
-                   │                         │
-                   └────────────┬────────────┘
-                                │
-                                ▼
-                         Backend / APIs
-                                │
-                                ▼
-                           Data Layer
-```
-
-You should be able to explain:
-
-> **How can multiple independently developed Micro Frontends work together as one complete application while sharing data, state, events, UI, and backend services without becoming tightly coupled?**
-
-You should also be able to justify when to use:
-
-```text
-Module Federation
-        ↓
-Shared Libraries
-        ↓
-Global State
-        ↓
-Event-Driven Communication
-        ↓
-Browser Data Sharing
-        ↓
-Backend APIs
-        ↓
-CI/CD
-```
-
-based on:
-
-- Coupling
-- Scalability
-- Maintainability
-- Performance
-- Deployment independence
-- Security
-- Communication requirements
-- Application complexity
-
----
-
-# 🚀 Final Challenge
-
-Design your application as if it were going to be maintained by **multiple engineering teams**.
-
-Think about:
-
-```text
-Team A → MFE 1
-Team B → MFE 2
-Team C → Gateway
-Team D → Backend
-Team E → Shared Libraries
-```
-
-Your architecture should make it possible for these teams to work independently while still producing **one cohesive application**.
-
-The final project should demonstrate not only **how to build Micro Frontends**, but also **how to architect, communicate, test, deploy, and maintain them at scale**.
-
----
-
-# 💡 Tips
-
-- Start with the architecture before writing code.
-- Clearly define the responsibility of every MFE.
-- Keep MFEs focused on their business domains.
-- Keep shared libraries generic.
-- Avoid unnecessary global state.
-- Prefer events when you only need to notify another MFE that something happened.
-- Use shared state when multiple MFEs genuinely need the same application state.
-- Keep backend responsibilities separate from frontend responsibilities.
-- Handle Remote loading failures gracefully.
-- Test communication between MFEs.
-- Test your application with one Remote intentionally stopped.
-- Keep environment configuration separate from source code.
-- Make your CI pipeline run on every Pull Request.
-- Document your architectural decisions.
-
----
-
-## 📅 Deadline
-
-Please submit your GitHub repo link by: 18 - September - 2026
-
----
-
-# 🏁 Conclusion
-
-This final project is your opportunity to demonstrate everything you have learned during the MFE training.
-
-Build a system that is:
-
-**Modular → Scalable → Testable → Maintainable → Independently Deployable**
-
-Most importantly:
-
-> **Don't just make the MFEs work. Be able to explain why your architecture works.**
-
-# 🚀 Good Luck!
-
-Build something meaningful, make thoughtful architectural decisions, and demonstrate that you are ready to design and work with Micro Frontend systems in a real-world engineering environment.
+This project demonstrates a production-oriented, scalable, and resilient Micro Frontend platform. By combining **Module Federation**, **decoupled event-driven messaging (`window.NISUM`)**, **reactive shared state (Zustand)**, and **comprehensive error boundaries**, the platform provides a blueprint for large engineering organizations to build and maintain independent frontends that work seamlessly as one unified product.
