@@ -2,32 +2,32 @@
   "root": true,
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
-    "ecmaVersion": 2022,
+    "ecmaVersion": 2020,
     "sourceType": "module",
-    "ecmaFeatures": {
-      "jsx": true
-    }
+    "ecmaFeatures": { "jsx": true }
   },
-  "plugins": ["@typescript-eslint"],
+  "plugins": ["@typescript-eslint", "react", "react-hooks"],
   "extends": [
     "eslint:recommended",
-    "plugin:@typescript-eslint/recommended"
+    "plugin:@typescript-eslint/recommended",
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended"
   ],
-  "rules": {
-    "@typescript-eslint/no-explicit-any": "off",
-    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-    "no-console": ["warn", { "allow": ["warn", "error", "info"] }]
+  "settings": {
+    "react": { "version": "18.3" }
   },
   "env": {
     "browser": true,
-    "node": true,
-    "es2022": true,
-    "jest": true
+    "es2021": true,
+    "node": true
   },
-  "ignorePatterns": [
-    "dist",
-    "node_modules",
-    "*.config.js",
-    "jest.setup.ts"
-  ]
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "react/prop-types": "off",
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    "@typescript-eslint/no-empty-interface": "off",
+    "no-empty-pattern": "off"
+  },
+  "ignorePatterns": ["dist", "build", "node_modules", "*.config.js", "webpack.config.js"]
 }

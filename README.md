@@ -1,588 +1,361 @@
-# 🛒 Production-Ready E-Commerce Micro Frontend Platform
+# NISUM Shop — Micro Frontend E-Commerce Platform
 
-[![CI Pipeline](https://github.com/NisumPK/nisumpk-mfe-training-final-project-MFE-training-assignment/actions/workflows/ci.yml/badge.svg)](https://github.com/NisumPK/nisumpk-mfe-training-final-project-MFE-training-assignment/actions/workflows/ci.yml)
-[![Node.js Version](https://img.shields.io/badge/node-v20%20%7C%20v22-brightgreen.svg)](https://nodejs.org)
-[![Webpack](https://img.shields.io/badge/Module%20Federation-Webpack%205-blue.svg)](https://webpack.js.org/concepts/module-federation/)
-[![React](https://img.shields.io/badge/React-18.3.1-61dafb.svg)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)](https://www.typescriptlang.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
----
+Final project for the Micro Frontend (MFE) Training: a production-shaped e-commerce platform built as a Gateway + three independently-developed Micro Frontends, a shared Redux store, a `window.NISUM` event bus, and an Express backend — composed at runtime via Webpack Module Federation inside an npm-workspaces monorepo.
 
 ## Overview
 
-This project is the **Final Project for the Micro Frontend (MFE) Training at Nisum**. It implements a complete, enterprise-grade, scalable **E-Commerce Platform** following **Scenario 1** and strictly complying with all **24 Important Rules** defined in the training specifications.
-
-The platform demonstrates how independently developed, tested, and deployable frontend applications work harmoniously within a unified user experience using **Webpack 5 Module Federation**, a **monorepo workspace**, **Zustand shared global state**, an event-driven **`window.NISUM` event bus**, a resilient **Express REST API backend**, and automated **CI/CD pipelines**.
-
----
+This isn't a single app split into folders — it's four separately-built frontend applications (a gateway/shell and three MFEs), each independently runnable, independently testable, and independently deployable, that only know about each other through three explicit contracts: a shared Redux store, a shared browser event bus (`window.NISUM`), and a REST API. The goal was to make every one of those contracts do real work — not exist as a demo stub — and to document why each one was chosen over the alternatives.
 
 ## Business Scenario
 
-### Scenario 1 — E-Commerce Retail Platform
+**E-commerce**, extending the domain used earlier in this training (Assignments 1 and 2: a routed shell + a shared cart across catalog/cart MFEs). Three MFEs give three genuinely distinct business responsibilities, a natural piece of shared state (the cart), and a natural event chain (`product → cart → order`):
 
-The business scenario models a modern multi-category electronic and accessory storefront:
-
-1. **Gateway / Shell (Host - Port `4200`)**: Acts as the customer-facing orchestrator. Provides responsive layout, navigation between views, currency switching, customer profile badge, dynamic remote loading with error boundaries, and centralized toast notifications.
-2. **Product Catalog MFE (Remote - Port `4201`)**: Owned by the Catalog Team. Provides interactive product discovery with category filtering, keyword search, inventory indicators, and dynamic price conversion. When an item is purchased, it triggers decoupled events via `window.NISUM` and updates global state.
-3. **Shopping Cart MFE (Remote - Port `4202`)**: Owned by the Checkout & Orders Team. Consumes cross-MFE events, calculates line totals, taxes, discounts, and shipping fees, syncs cart updates with the backend REST API, and executes the final checkout order creation.
-4. **Backend API Service (Express - Port `3000`)**: Provides authoritative RESTful endpoints for catalog data, server-persisted cart state, order placement transactions, and health checks.
-
----
+- **Product Catalog** — browse products, add to cart.
+- **Cart** — review, adjust, and check out the cart.
+- **Orders** (3rd/bonus MFE) — order history for the logged-in user.
 
 ## Architecture
 
-The platform adopts a **Runtime Composition Architecture** with loose coupling between services:
-
-- **Host-Remote Topology**: The Gateway acts as the Module Federation Host. Remotes (`mfe-product` and `mfe-cart`) expose self-contained components compiled into `remoteEntry.js` bundles loaded dynamically at runtime.
-- **Shared Dependency Singletons**: Core libraries (`react`, `react-dom`, `zustand`, `@ecommerce/*`) are configured as shared singletons across federation boundaries, ensuring zero duplicate React runtimes and shared memory space for global stores.
-- **Fault-Tolerant Fallbacks**: Every remote import is protected by a `RemoteBoundary` containing an `ErrorBoundary` and `Suspense` fallback. If a remote service crashes or experiences network failure, the Shell remains responsive and displays a localized retry control without breaking the rest of the application.
-- **Dual-Channel Communication**:
-  - **Shared Reactive State**: For persistent, synchronous application-level data (currency selection, active user session, cart total counter).
-  - **Event-Driven Communication**: For asynchronous cross-boundary notifications (`cart:item-added`, `cart:updated`, `order:created`, `notification:show`) through standard browser CustomEvents.
-
----
-
-## Architecture Diagram
-
-```text
-                               ┌──────────────────────────────────────────────┐
-                               │           Gateway / Shell (Host)             │
-                               │          Webpack 5 DevServer :4200           │
-                               │  - Layout Shell & Global Navigation          │
-                               │  - Currency Selector & Toast System          │
-                               │  - Remote Fallback Error Boundaries          │
-                               └──────────────┬────────────────┬──────────────┘
-                                              │                │
-                             Module Federation│                │Module Federation
-                             (remoteEntry.js) │                │(remoteEntry.js)
-                                              ▼                ▼
-                     ┌───────────────────────────┐  ┌───────────────────────────┐
-                     │   Product Catalog MFE     │  │     Shopping Cart MFE     │
-                     │  Remote / Standalone :4201│  │  Remote / Standalone :4202│
-                     │  Exposes: ./ProductList   │  │  Exposes: ./CartView      │
-                     │                           │  │           ./CartBadge     │
-                     └─────────────┬─────────────┘  └─────────────┬─────────────┘
-                                   │                              │
-                                   │  NISUM.emit('cart:item-added')│ NISUM.listener(...)
-                                   └──────────────┐        ┌──────┘
-                                                  ▼        ▼
-                                        ┌─────────────────────────┐
-                                        │    Global Event Bus     │
-                                        │      window.NISUM       │
-                                        │  (Browser CustomEvents) │
-                                        └─────────────────────────┘
-                                                  ▲        ▲
-                                                  │        │
-                                        ┌─────────┴────────┴────────┐
-                                        │    Shared Global State    │
-                                        │    @ecommerce/state       │
-                                        │     (Zustand Store)       │
-                                        └───────────────────────────┘
-                                                  │        │
-                                                  ▼        ▼
-                                        ┌───────────────────────────┐
-                                        │      Backend REST API     │
-                                        │        Express :3000      │
-                                        │  /api/products  /api/cart │
-                                        │  /api/orders    /api/health│
-                                        └───────────────────────────┘
+```
+                         ┌─────────────────────────┐
+                         │   Gateway / Shell (Host) │
+                         │  routing · nav · auth ·  │
+                         │  error boundaries        │
+                         └────────────┬─────────────┘
+                                      │ Module Federation (runtime)
+              ┌───────────────────────┼───────────────────────┐
+              │                       │                       │
+      ┌───────▼───────┐      ┌────────▼────────┐     ┌────────▼────────┐
+      │  Product MFE   │      │    Cart MFE     │     │   Orders MFE    │
+      │  :3001         │      │    :3002        │     │   :3003         │
+      └───────┬────────┘      └────────┬─────────┘     └────────┬────────┘
+              │                        │                        │
+              └───────────┬────────────┴────────────┬───────────┘
+                           │                         │
+                 ┌─────────▼─────────┐     ┌─────────▼─────────┐
+                 │  Shared Redux      │     │  window.NISUM     │
+                 │  Store (cart, auth)│     │  event bus         │
+                 │  @nisum-mfe/state  │     │  @nisum-mfe/events │
+                 └────────────────────┘     └────────────────────┘
+                           │
+                 ┌─────────▼─────────┐
+                 │   Backend API      │
+                 │   Express :4000    │
+                 └────────────────────┘
 ```
 
----
+Every app also independently talks to `libs/shared-ui`, `libs/shared-types`, and `libs/utilities` (not drawn above to keep this readable) — see [Shared Libraries](#shared-libraries).
 
 ## Technologies Used
 
-| Layer | Technology | Purpose |
+| Layer | Choice | Why |
 |---|---|---|
-| **Micro Frontend Federation** | Webpack 5 `ModuleFederationPlugin` | Runtime module composition, dependency sharing, and independent deployment |
-| **Frontend Framework** | React 18.3 (`react`, `react-dom`) | Component-based UI with hooks and lazy loading |
-| **Language & Typing** | TypeScript 5.6 | Strict type safety and shared interfaces across apps and libs |
-| **State Management** | Zustand 4.5 | Lightweight reactive store shared as a singleton across MFEs |
-| **Event System** | `window.NISUM` (Browser CustomEvents) | Loosely coupled pub/sub cross-MFE communication |
-| **Backend Server** | Node.js + Express 4.21 | RESTful APIs for catalog, persistent cart, and orders |
-| **Monorepo Architecture** | npm Workspaces + Nx | Workspace orchestration, centralized scripts, path aliases |
-| **Styling & Design System** | Modern Vanilla CSS & CSS Tokens | Glassmorphism, tailored HSL color tokens, dark mode accents |
-| **Testing** | Jest 29 + React Testing Library + Supertest | Unit, component, integration, and API testing |
-| **CI/CD** | GitHub Actions (`.github/workflows/ci.yml`) | Automated build, test, lint, and type checking pipeline |
-
----
+| Module Federation | Webpack 5 `ModuleFederationPlugin` | Matches Assignment 2's precedent in this training; mature, well-documented `shared`/singleton semantics. |
+| Monorepo | npm workspaces | Matches Assignments 1.1/2's precedent; zero extra tooling to learn beyond npm itself (see [Architecture Decisions](#architecture-decisions) for the Nx trade-off). |
+| Language | TypeScript everywhere (frontend + backend) | One type system end to end; `@nisum-mfe/shared-types` is the single source of truth for domain shapes. |
+| UI | React 18 | Required by the training; `react-redux` context works cleanly across federated remotes rendered in the same tree. |
+| Global state | Redux Toolkit | Predictable, serializable, easy to make a true cross-remote singleton via MF `shared`. |
+| Backend | Express + TypeScript | Minimal, fast to reason about; in-memory seeded data keeps the project self-contained (no DB to provision). |
+| Testing | Vitest + Testing Library + Supertest | Matches Assignment 2's precedent; fast, native ESM, one config shape reused across every workspace. |
+| CI/CD | GitHub Actions | Required; GitHub Pages for best-effort static deploy (see [Deployment](#deployment)). |
+| Containers | Docker + docker-compose | Bonus: the whole platform boots with one command from clean containers. |
 
 ## Project Structure
 
-```text
-nisumpk-mfe-training-final-project-MFE-training-assignment/
-├── apps/
-│   ├── gateway/                      # Shell / Host application (Port 4200)
-│   │   ├── public/index.html
-│   │   ├── src/
-│   │   │   ├── components/           # RemoteBoundary, ToastContainer, ArchitectureView
-│   │   │   ├── App.tsx               # Main shell layout with remote lazy loading
-│   │   │   ├── bootstrap.tsx         # Host bootstrap mount
-│   │   │   ├── index.ts              # Async Module Federation entry
-│   │   │   ├── App.test.tsx          # Gateway unit/component test suite
-│   │   │   └── decls.d.ts            # Remote module TS declarations
-│   │   ├── webpack.config.js         # Host federation config
-│   │   └── tsconfig.json
-│   │
-│   ├── mfe-product/                  # Product Catalog MFE (Port 4201)
-│   │   ├── public/index.html
-│   │   ├── src/
-│   │   │   ├── components/           # ProductList, ProductCard
-│   │   │   ├── exposes/              # ProductListExport exposed to federation
-│   │   │   ├── App.tsx               # Standalone development container
-│   │   │   ├── bootstrap.tsx         # Standalone root mount
-│   │   │   ├── index.ts              # Async Module Federation entry
-│   │   │   └── ProductCard.test.tsx  # Product catalog component test suite
-│   │   ├── webpack.config.js         # Remote federation config exposing ./ProductList
-│   │   └── tsconfig.json
-│   │
-│   ├── mfe-cart/                     # Shopping Cart MFE (Port 4202)
-│   │   ├── public/index.html
-│   │   ├── src/
-│   │   │   ├── components/           # CartView, CartBadge
-│   │   │   ├── exposes/              # CartViewExport, CartBadgeExport
-│   │   │   ├── App.tsx               # Standalone development container
-│   │   │   ├── bootstrap.tsx         # Standalone root mount
-│   │   │   ├── index.ts              # Async Module Federation entry
-│   │   │   └── CartView.test.tsx     # Cart component test suite
-│   │   ├── webpack.config.js         # Remote federation config exposing ./CartView, ./CartBadge
-│   │   └── tsconfig.json
-│   │
-│   └── api/                          # Express Backend API Service (Port 3000)
-│       ├── src/
-│       │   ├── data/                 # In-memory product catalog seed
-│       │   ├── routes/               # products.ts, cart.ts, orders.ts, health.ts
-│       │   ├── index.ts              # Server bootstrap and CORS middleware
-│       │   └── api.test.ts           # Supertest API endpoint tests
-│       └── tsconfig.json
-│
-├── libs/
-│   ├── shared-types/                 # Universal TypeScript contracts
-│   │   └── src/index.ts              # Product, CartItem, Order, NisumEventMap, etc.
-│   ├── shared-ui/                    # Reusable Design System components
-│   │   ├── src/
-│   │   │   ├── components/           # Button, Card, Badge, Loader, ErrorBoundary, Toast
-│   │   │   ├── styles/tokens.css     # CSS custom property design tokens
-│   │   │   └── index.ts
-│   ├── events/                       # window.NISUM Event Engine
-│   │   ├── src/
-│   │   │   ├── index.ts              # NISUM.emit, NISUM.listener implementation
-│   │   │   └── index.test.ts         # Event bus unit tests
-│   ├── state/                        # Shared reactive Zustand store
-│   │   ├── src/
-│   │   │   ├── index.ts              # useAppStore singleton hook and actions
-│   │   │   └── index.test.ts         # Store unit tests
-│   └── utilities/                    # Formatters, HTTP client, environment readers
-│       ├── src/
-│       │   ├── index.ts              # formatCurrency, getEnv, fetchJson
-│       │   └── index.test.ts         # Utilities unit tests
-│
-├── .github/
-│   └── workflows/
-│       └── ci.yml                    # Automated GitHub Actions CI workflow
-├── package.json                      # Monorepo workspaces and unified scripts
-├── tsconfig.base.json                # Shared compiler options & path mappings
-├── tsconfig.json                     # Root project reference
-├── nx.json                           # Workspace metadata
-├── jest.config.js                    # Monorepo Jest test configuration
-├── jest.setup.ts                     # DOM matchers setup
-├── .eslintrc.json                    # ESLint rule configuration
-├── .env.example                      # Environment variables template
-└── README.md                         # Complete project documentation
+```
+apps/
+  gateway/       host — layout, routing, auth widget, error boundaries        (:3000)
+  mfe-product/   remote — product catalog, exposes ./ProductApp               (:3001)
+  mfe-cart/      remote — cart + checkout, exposes ./CartApp                  (:3002)
+  mfe-orders/    remote — order history, exposes ./OrdersApp                  (:3003)
+  api/           Express + TypeScript backend                                 (:4000)
+libs/
+  shared-types/  @nisum-mfe/shared-types — Product, CartItem, Order, User, NisumEventMap
+  shared-ui/     @nisum-mfe/shared-ui — Button, Card, Badge, Spinner, ErrorBoundary, NotificationCenter
+  state/         @nisum-mfe/state — Redux store (authSlice, cartSlice), typed hooks
+  events/        @nisum-mfe/events — the NISUM event bus + useNisumListener hook
+  utilities/     @nisum-mfe/utilities — env reader, fetchJson, formatCurrency, logger
+docker/          (Dockerfile lives per-app; see Deployment)
+.github/workflows/
+  ci.yml         install → lint → typecheck → test → build
+  cd.yml         best-effort static deploy to GitHub Pages
+docker-compose.yml
 ```
 
----
+Every `apps/*` and `libs/*` package has its own `package.json`, `tsconfig.json`, and (where it has tests) `vitest.config.ts` — each is a real, independent unit, not a folder-of-convenience.
 
 ## Applications
 
 ### Gateway
-- **Role**: Module Federation Host running on port `4200`.
-- **Responsibilities**:
-  - Dynamically loads `mfe_product/ProductList`, `mfe_cart/CartView`, and `mfe_cart/CartBadge` using runtime URLs.
-  - Houses the top application bar with brand mark, user profile pill, and live navigation switcher (`Catalog`, `Shopping Cart`, `Architecture & Health`).
-  - Provides a global currency dropdown connected directly to `@ecommerce/state`.
-  - Integrates `ToastContainer` listening to cross-MFE `notification:show` events.
-  - Wraps remote modules in `RemoteBoundary` to prevent cascading failures.
 
-### MFE 1: Product Catalog (`mfe-product`)
-- **Role**: Remote application running on port `4201`.
-- **Exposed Module**: `./ProductList` (`ProductListExport.tsx`).
-- **Responsibilities**:
-  - Fetches catalog data from the Backend API (`GET /api/products`).
-  - Provides category filtering (All, Audio, Wearables, Electronics, Accessories) and real-time search.
-  - Renders pricing formatted dynamically according to global store currency (`USD`, `EUR`, `GBP`).
-  - On clicking "Add to Cart":
-    1. Emits `cart:item-added` via `window.NISUM.emit()`.
-    2. Emits `notification:show` via `window.NISUM.emit()`.
-    3. Increments shared cart counter in `@ecommerce/state`.
-- **Standalone Execution**: Run independently at `http://localhost:4201`.
+The Module Federation **host** and the only app with routing (`react-router-dom`) and layout. Responsibilities:
 
-### MFE 2: Shopping Cart (`mfe-cart`)
-- **Role**: Remote application running on port `4202`.
-- **Exposed Modules**: `./CartView` (`CartViewExport.tsx`), `./CartBadge` (`CartBadgeExport.tsx`).
-- **Responsibilities**:
-  - Subscribes to `cart:item-added` via `window.NISUM.listener()` and cleans up listener on unmount.
-  - Renders line items, supports quantity modification (+ / -) and deletion.
-  - Calculates subtotal, sales tax (8%), conditional free shipping (> $100), and VIP member discounts (> $200).
-  - Syncs changes with Backend API (`POST /api/cart`, `PUT /api/cart/:id`, `DELETE /api/cart/:id`).
-  - Emits `order:created` and `notification:show` upon order checkout completion.
-- **Standalone Execution**: Run independently at `http://localhost:4202`.
+- Loads the three remotes at **runtime** via `React.lazy(() => import('mfeProduct/ProductApp'))` etc. (see [`src/remotes.ts`](apps/gateway/src/remotes.ts)).
+- Wraps every routed remote in a `RemoteBoundary` (`ErrorBoundary` + `Suspense`, see [`src/components/RemoteBoundary.tsx`](apps/gateway/src/components/RemoteBoundary.tsx)) so a remote that's down or crashes shows a "module unavailable, retry" panel **without taking down the rest of the shell**.
+- Owns the mock login widget ([`src/components/AuthWidget.tsx`](apps/gateway/src/components/AuthWidget.tsx)) and the cart badge in the nav.
+- Attaches the shared event bus to `window.NISUM` exactly once, at bootstrap (see [`src/bootstrap.tsx`](apps/gateway/src/bootstrap.tsx)).
 
-### Backend Service (`api`)
-- **Role**: RESTful API service running on port `3000`.
-- **Responsibilities**:
-  - `GET /api/products`: Retrieves catalog with optional category and search query parameters.
-  - `GET /api/products/:id`: Retrieves individual product specifications.
-  - `GET /api/cart`: Returns current server cart summary.
-  - `POST /api/cart`: Adds an item to the persistent cart.
-  - `PUT /api/cart/:id`: Modifies item quantity.
-  - `DELETE /api/cart/:id`: Deletes single cart item.
-  - `DELETE /api/cart`: Clears cart upon order placement.
-  - `POST /api/orders`: Validates cart items, generates order ID, and confirms order.
-  - `GET /api/health`: Provides service uptime and status for architecture monitoring.
+### MFE 1 — Product Catalog (`mfe-product`)
 
----
+Fetches the catalog from `GET /api/products`, renders it, and is the primary **event emitter**: clicking "Add to cart" both dispatches into the shared cart slice and emits `cart:item-added` on NISUM (see [`src/components/ProductCard.tsx`](apps/mfe-product/src/components/ProductCard.tsx) — the one interaction in this project that deliberately goes through both data-sharing mechanisms at once). Includes a feature-flagged "Recommended products" section gated by `ENABLE_RECOMMENDATIONS`.
+
+### MFE 2 — Cart (`mfe-cart`)
+
+Reads the cart directly from the shared Redux store (state sharing) and separately **listens** for `cart:item-added` (event sharing) purely to briefly highlight the row that was just added — a concern the store has no reason to know about (see [`src/App.tsx`](apps/mfe-cart/src/App.tsx)). Checkout posts to `POST /api/orders`, then emits `order:created`.
+
+### MFE 3 (bonus) — Orders (`mfe-orders`)
+
+Reads the logged-in user from shared state, fetches `GET /api/orders?userId=`, and **refetches automatically** on `order:created` — the checkout → order-history handoff happens purely over the event bus, with zero direct import between the Cart and Orders apps.
+
+### Backend
+
+Express + TypeScript, in-memory seeded data (see [Backend/API](#backendapi)).
 
 ## Module Federation
 
-Module Federation is implemented using Webpack 5's native `ModuleFederationPlugin`.
+- **Host**: gateway. **Remotes**: `mfeProduct`, `mfeCart`, `mfeOrders`.
+- Each remote exposes exactly one page-level component (`./ProductApp`, `./CartApp`, `./OrdersApp`) — a plain component with no `<Provider>`/root of its own, so it renders inside the gateway's existing React tree and shares Redux context. Each remote *also* has its own `src/index.tsx` → `src/bootstrap.tsx` bootstrap (with its own `<Provider>`) so it is **independently runnable** with `npm run dev` from inside its own folder — see the "Independent Deployment" note below for why both exist.
+- **Shared singletons** in every `ModuleFederationPlugin` config: `react`, `react-dom`, `react-redux`, `@reduxjs/toolkit`, `react-router-dom` (host only), and — the load-bearing part — the workspace libraries `@nisum-mfe/state` and `@nisum-mfe/events` are *also* marked `singleton: true`. That's what makes "shared state" and "the event bus" actually the same runtime instance across four independently-built bundles, not four structurally-identical copies.
+- Every federated entry point (`src/index.tsx`) does `import('./bootstrap')` rather than importing React directly — the standard workaround so Module Federation's async shared-scope negotiation completes before any shared module is evaluated ("eager consumption" otherwise throws at runtime).
+- **Remote URLs are never hardcoded.** Each `webpack.config.js` reads them from `.env` (`PRODUCT_MFE_URL`, `CART_MFE_URL`, `ORDERS_MFE_URL`, `API_URL`) via `dotenv`, with `.env.example` committed per app and the real `.env` gitignored.
+- **Failure isolation**: `src/remotes.ts` wraps every remote `import()` in a `.catch()` that logs and rethrows, and the gateway's `RemoteBoundary` (`ErrorBoundary` + `Suspense`) catches it — a remote that's offline, mid-deploy, or throwing at runtime degrades to a fallback panel with a **Retry** button; the other two remotes and the shell keep working. Verified manually by stopping the cart MFE's dev server and confirming `/cart` shows the fallback while `/` and `/orders` stay fully functional.
 
-### Gateway Host Configuration (`apps/gateway/webpack.config.js`)
-```javascript
-new ModuleFederationPlugin({
-  name: 'gateway',
-  remotes: {
-    mfe_product: `mfe_product@${MFE_PRODUCT_URL}/remoteEntry.js`,
-    mfe_cart: `mfe_cart@${MFE_CART_URL}/remoteEntry.js`
-  },
-  shared: {
-    react: { singleton: true, requiredVersion: '^18.3.1', eager: false },
-    'react-dom': { singleton: true, requiredVersion: '^18.3.1', eager: false },
-    zustand: { singleton: true, eager: false },
-    '@ecommerce/shared-types': { singleton: true, eager: false },
-    '@ecommerce/shared-ui': { singleton: true, eager: false },
-    '@ecommerce/events': { singleton: true, eager: false },
-    '@ecommerce/state': { singleton: true, eager: false },
-    '@ecommerce/utilities': { singleton: true, eager: false }
-  }
-})
-```
+### Independent deployment
 
-### Remote MFE Configuration (`apps/mfe-product/webpack.config.js`)
-```javascript
-new ModuleFederationPlugin({
-  name: 'mfe_product',
-  filename: 'remoteEntry.js',
-  exposes: {
-    './ProductList': './src/exposes/ProductListExport'
-  },
-  shared: { /* same singletons */ }
-})
-```
-
-### Remote MFE Configuration (`apps/mfe-cart/webpack.config.js`)
-```javascript
-new ModuleFederationPlugin({
-  name: 'mfe_cart',
-  filename: 'remoteEntry.js',
-  exposes: {
-    './CartView': './src/exposes/CartViewExport',
-    './CartBadge': './src/exposes/CartBadgeExport'
-  },
-  shared: { /* same singletons */ }
-})
-```
-
----
+- Each app has its own `package.json`, its own dev server/port, and its own `Dockerfile` — none of them import another app's source.
+- The gateway discovers remotes purely by URL (`PRODUCT_MFE_URL` etc.), resolved at **build time** for that specific gateway build. Redeploying `mfe-product` to a new URL only requires rebuilding the gateway with the new env var — no changes to `mfe-product` itself, and no changes to the other two MFEs at all.
+- **Version compatibility**: `requiredVersion` on every shared singleton (read from each app's own `package.json`) means a version mismatch across independently-deployed apps fails loudly (a webpack runtime warning/error) instead of silently loading two incompatible copies of React or Redux Toolkit.
+- **When a remote is unavailable**: see the failure-isolation paragraph above — this is the actual production concern this pattern is meant to answer, and it's implemented, not just described.
 
 ## Monorepo Architecture
 
-The monorepo uses standard **npm Workspaces** integrated with TypeScript base paths (`tsconfig.base.json`):
-- `apps/*`: Application entry points (`gateway`, `mfe-product`, `mfe-cart`, `api`).
-- `libs/*`: Reusable libraries (`shared-types`, `shared-ui`, `events`, `state`, `utilities`).
-
-Benefits:
-- Single dependency installation via `npm install`.
-- Code changes in `libs/*` are instantly reflected across all applications without requiring premature publishing to an npm registry.
-- Standardized tooling: single ESLint configuration, single Jest runner, and unified CI pipeline.
-
----
+**npm workspaces**, not Nx. `package.json`'s `workspaces` field lists `libs/*` and `apps/*`; every workspace package is symlinked into the root `node_modules`. Libraries are consumed **from TypeScript source**, not a pre-built `dist` — each app's `babel-loader` rule excludes `node_modules` **except** `@nisum-mfe/*`, so a lib change is picked up by every consuming app's dev server immediately, with no separate "build the shared lib first" step. See [Architecture Decisions](#architecture-decisions) for why this over Nx.
 
 ## Shared Libraries
 
-1. **`@ecommerce/shared-types`**:
-   Universal TypeScript interfaces (`Product`, `CartItem`, `Order`, `AppNotification`, `NisumEventMap`). Eliminates drift between MFEs and the backend.
-2. **`@ecommerce/shared-ui`**:
-   Clean design system components (`Button`, `Card`, `Badge`, `Loader`, `ErrorBoundary`, `Toast`) and global CSS design tokens (`tokens.css`).
-3. **`@ecommerce/events`**:
-   The `window.NISUM` event engine providing `emit()` and `listener()`.
-4. **`@ecommerce/state`**:
-   The shared Zustand store providing reactive currency, cart item count, active view, and user session data.
-5. **`@ecommerce/utilities`**:
-   Common utilities including `formatCurrency()`, `getEnv()`, and resilient `fetchJson()` with HTTP error parsing.
+| Library | Package | Contains |
+|---|---|---|
+| `shared-types` | `@nisum-mfe/shared-types` | `Product`, `CartItem`, `Order`, `User`, and `NisumEventMap` (the compile-time contract for every NISUM event name + payload) |
+| `shared-ui` | `@nisum-mfe/shared-ui` | Generic, business-agnostic components: `Button`, `Card`, `Badge`, `Spinner`/`LoadingPanel`, `ErrorPanel`, `ErrorBoundary`, `NotificationCenter` |
+| `state` | `@nisum-mfe/state` | The Redux Toolkit store, `authSlice`, `cartSlice`, typed `useAppDispatch`/`useAppSelector` |
+| `events` | `@nisum-mfe/events` | The NISUM event bus, `attachNisumToWindow`, the `useNisumListener` React hook |
+| `utilities` | `@nisum-mfe/utilities` | `readEnv`/`readBoolEnv`, `fetchJson` (centralized API error handling), `formatCurrency`, `createLogger` |
 
----
+`shared-ui` deliberately contains **no** cart/order/product-specific components — `NotificationCenter` only knows about the generic `notification:show` event, not about carts.
 
 ## Global State
 
-Implemented using **Zustand** shared as a Module Federation singleton:
-- **State Properties**:
-  - `currency`: Selected currency (`USD`, `EUR`, `GBP`).
-  - `exchangeRates`: Conversion ratios.
-  - `cartCount`: Real-time total count of items in cart.
-  - `user`: Authenticated customer profile (`Alex Morgan`, `Gold VIP`).
-  - `activeView`: Currently displayed view tab (`products`, `cart`, `architecture`).
-  - `toasts`: Active notification queue.
-- **Why Zustand?**
-  Zustand provides a lightweight, hook-based API with zero boilerplate, full TypeScript safety, and outside-React store access (`getState()`, `setState()`). Because Module Federation shares it as a singleton, all MFEs and the Gateway access the exact same store instance in browser memory.
+Redux Toolkit store in `@nisum-mfe/state`, shared as a **Module Federation singleton** (see [Module Federation](#module-federation)):
 
----
+```ts
+{
+  auth: { user: { id, name, email } | null },
+  cart: { items: CartItem[] }   // totals derived via selectors
+}
+```
+
+- **`cartSlice`**: Product MFE dispatches `addItem`; Cart MFE reads it via `selectCartItems`/`selectCartTotalPrice` and dispatches `updateQuantity`/`removeItem`/`clearCart`; the gateway reads `selectCartTotalItems` for the nav badge. Three independently-built apps genuinely depend on the same store instance — this is not decorative.
+- **`authSlice`**: set by the gateway's mock login widget; read by the Cart MFE (checkout is gated on being logged in) and the Orders MFE (which order history to fetch).
+- Both slices are persisted to `localStorage` and synced across browser tabs via the `storage` event (see [Data-Sharing Strategy](#data-sharing-strategy) row 4).
 
 ## Event-Driven Architecture
 
-Cross-MFE communication uses loose coupling with browser-based events:
-- MFEs never directly import each other's internal files.
-- The emitting MFE publishes an event onto the event bus without caring which components or remotes are currently listening.
-- If a listening MFE is not mounted, events fail silently without breaking execution.
+```
+Product MFE                         Cart MFE
+   │  NISUM.emit('cart:item-added') │
+   └────────────► window ───────────┴──► NISUM.listener('cart:item-added')
+                     │                         (highlights the new row)
+                     └──► Gateway's NotificationCenter (toast)
 
----
+Cart MFE                            Orders MFE
+   │  NISUM.emit('order:created')   │
+   └────────────► window ───────────┴──► NISUM.listener('order:created')
+                                              (refetches order history)
+```
+
+| Event | Emitted by | Listened by | Purpose |
+|---|---|---|---|
+| `cart:item-added` | Product MFE | Cart MFE, Gateway | Notify without coupling Product → Cart internals |
+| `cart:item-removed` | *(reserved — see Future Improvements)* | — | |
+| `product:selected` | Product MFE | Gateway | Cross-cutting notification/logging |
+| `order:created` | Cart MFE | Orders MFE, Gateway | Checkout → order-history handoff |
+| `user:login` / `user:logout` | Gateway auth widget | (any app can subscribe) | Auth transition, alongside the `authSlice` state change |
+| `notification:show` | any app | Gateway `NotificationCenter` | Generic reusable toast channel |
 
 ## NISUM Event System
 
-Attached to the global `window.NISUM` object, satisfying **Important Rules 11 and 12**:
+Built on the browser's native `CustomEvent` / `EventTarget` — not a bespoke pub-sub implementation, so it works identically everywhere and needs no polyfill (see [`libs/events/src/eventBus.ts`](libs/events/src/eventBus.ts)):
 
-### Event API
-```typescript
-// Emitting an event
-NISUM.emit('cart:item-added', {
-  product: productData,
-  quantity: 1,
-  timestamp: Date.now()
-});
+```ts
+NISUM.emit('cart:item-added', { productId: '123', name: 'Mug', quantity: 1, price: 9.99 });
 
-// Registering a listener (returns cleanup function)
 const unsubscribe = NISUM.listener('cart:item-added', (data) => {
-  console.log('Item added payload:', data);
+  console.log(data); // fully typed via NisumEventMap
 });
-
-// Unsubscribing (e.g., in React useEffect cleanup)
-unsubscribe();
+unsubscribe(); // always available — every listener is cleanly removable
 ```
 
-### Supported Core Events
-- `cart:item-added`: Emitted by `mfe-product`, consumed by `mfe-cart`.
-- `cart:updated`: Emitted by `mfe-cart` on quantity changes or deletions.
-- `order:created`: Emitted by `mfe-cart` on successful checkout.
-- `notification:show`: Emitted across all MFEs, consumed by Gateway `ToastContainer`.
-- `currency:changed`: Emitted when global currency switches.
-
----
+- **Type-safe**: `emit`/`listener` are generic over `NisumEventMap` (in `shared-types`), so the event name and payload shape are checked at compile time.
+- **Attached to `window`**: `attachNisumToWindow()` runs once at the gateway's bootstrap and is idempotent (`if (!window.NISUM)`), so a remote that happens to run standalone doesn't clobber the shared instance.
+- **Listener cleanup**: the `useNisumListener(event, handler)` React hook (in `libs/events`) subscribes on mount and unsubscribes on unmount automatically — used in every MFE that listens for an event, so there is no listener-leak path through normal route navigation.
+- **Tested**: `libs/events/src/__tests__/eventBus.test.ts` covers emit/listener/payload/unsubscribe/event-isolation.
 
 ## Data-Sharing Strategy
 
-| Mechanism | Used For | Coupling | Persistence | Advantages | Limitations |
+| Mechanism | Used for | Coupling | Persistence | Advantages | Limitations |
 |---|---|---|---|---|---|
-| **Shared State (Zustand)** | Currency preferences, user session, cart total badge count | Medium | Runtime (in-memory) | Instant reactivity across MFEs; single source of truth | Requires singleton module sharing via federation |
-| **Event System (`window.NISUM`)** | Cross-MFE notifications (`cart:item-added`, `notification:show`) | Low | Ephemeral | Completely decoupled; standard DOM `CustomEvent` | Not persistent; requires listener active before dispatch |
-| **Module Federation** | Runtime composition of remote views (`ProductList`, `CartView`) | Medium | Runtime | Independent deployment; on-demand script chunk loading | Configuration complexity; network latency on first load |
-| **Backend REST API** | Catalog data, persistent cart items, order transactions | Low | Server-side | Authoritative persistence; business logic and security | Network latency; requires backend availability |
-| **Browser Storage** | User local preferences fallback | Low | Persistent | Survives page refresh across browser sessions | Client-specific; manual synchronization needed |
+| **Shared State** (Redux, MF singleton) | Cart contents, current user | Higher — consumers depend on a specific slice shape | Runtime + `localStorage` | Simple, synchronous reads; one source of truth for "what is the cart right now" | Every consumer is coupled to the store shape; harder to evolve without touching every reader |
+| **Events** (NISUM/window) | Cross-MFE notifications (`cart:item-added`, `order:created`, `user:login`) | Low — emitter and listener never import each other | Runtime only (nothing replays past events) | Fully decoupled; new listeners can be added without touching the emitter | Harder to trace/debug than a direct call; no guaranteed delivery order across listeners |
+| **Module Federation shared modules** | `react-redux`, `@reduxjs/toolkit`, `@nisum-mfe/state`, `@nisum-mfe/events` | Medium — apps agree on a shared dependency *version* | Runtime (one instance per page load) | Makes shared state/events possible at all across separately-built bundles; avoids bundling duplicate React instances | Version-mismatch failures are a real class of bug; adds build config complexity |
+| **Browser Storage** (`localStorage` + `storage` event) | Cart/auth persistence across reloads; cross-tab sync | Low | Persistent (survives refresh, shared across tabs) | Free persistence; no backend round-trip; the `storage` event gives cross-tab sync almost for free | Per-browser only; no cross-device sync; storage quota/private-mode edge cases (handled — see [Error Handling](#error-handling)) |
+| **Backend API** (REST) | Product catalog, order creation/history, mock login | Low — pure HTTP contract | Server-side (source of truth) | Central source of truth; works across devices/sessions | Network dependency; requires explicit loading/error states (implemented in every hook) |
 
----
+**Why not just one mechanism for everything?** Putting notifications in Redux would mean every listener re-renders on every dispatch and the store fills with transient "an event happened" noise. Putting the cart itself only in events would mean every consumer has to independently reconstruct and cache "what's in the cart right now" — exactly the bug class shared state exists to avoid. The add-to-cart flow in this project deliberately uses **both**, on the same user action, so the trade-off is visible in the running app rather than only in this table.
 
 ## Backend/API
 
-The Express backend runs on port `3000` with CORS enabled for `http://localhost:4200`, `http://localhost:4201`, and `http://localhost:4202`.
+Express + TypeScript, in-memory seeded data (`apps/api/src/data/*`) — no external DB, so the project is self-contained.
 
-### Endpoints
-- `GET /api/products`: Returns product list. Supports `?category=Audio` and `?search=webcam`.
-- `GET /api/products/:id`: Returns single product details.
-- `GET /api/cart`: Returns server cart state with calculated tax, shipping, and totals.
-- `POST /api/cart`: Adds product to cart. Body: `{ productId, name, price, quantity, image, category }`.
-- `PUT /api/cart/:id`: Updates quantity of an item. Body: `{ quantity }`.
-- `DELETE /api/cart/:id`: Removes item from cart.
-- `DELETE /api/cart`: Clears cart items.
-- `POST /api/orders`: Submits order transaction. Body: `{ items, totalAmount, currency, customer }`.
-- `GET /api/health`: Health status endpoint returning uptime and service version.
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/api/products` | List products (optional `?category=`) |
+| `GET` | `/api/products/:id` | One product, `404` if unknown |
+| `POST` | `/api/orders` | Create an order from `{ userId, items }`, `400` on invalid body |
+| `GET` | `/api/orders?userId=` | List a user's orders, `400` if `userId` missing |
+| `POST` | `/api/auth/login` | Mock login by email against seeded users, `401` if unknown |
+| `GET` | `/api/health` | Health check (uptime, timestamp) |
 
----
+CORS is restricted to the configured frontend origins (`CORS_ORIGINS` env var); `morgan` request logging is on outside of tests; a centralized `errorHandler` middleware returns a consistent `{ error, message }` JSON shape.
 
 ## Error Handling
 
-1. **Remote Loading Failures**:
-   If a remote MFE is unreachable, `RemoteBoundary` catches the dynamic import error and displays a clear message (e.g., `"Unable to load Remote Micro Frontend: mfe-product"`) with a "Retry Loading" button. The Gateway host and other MFEs continue functioning normally.
-2. **Backend Unavailability**:
-   Frontend components catch HTTP errors, display user-friendly error cards, and offer "Retry Fetch" buttons.
-3. **Event Listener Cleanup**:
-   All event listeners registered with `NISUM.listener()` return an unregister callback executed in React `useEffect` cleanups, preventing memory leaks and duplicate handler invocations.
-
----
+| Scenario | Handling |
+|---|---|
+| Remote MFE unavailable | Gateway's `RemoteBoundary` (`ErrorBoundary` + `Suspense`) shows "Module unavailable" + Retry; other routes keep working. Tested in `apps/gateway/src/__tests__/RemoteBoundary.test.tsx` and verified manually by killing an MFE's dev server. |
+| Backend unavailable / network error | `fetchJson` (in `@nisum-mfe/utilities`) normalizes network failures into a typed `ApiRequestError`; every data hook (`useProducts`, `useOrders`, `useCheckout`) surfaces it via `ErrorPanel` with a Retry button. |
+| API error response (4xx/5xx) | Same `fetchJson` path — the backend's `{ error, message }` body is surfaced as the panel's message. |
+| Loading states | Every async hook exposes a `loading` status rendered as `LoadingPanel`/`Spinner`; the gateway shows one per remote while its chunk downloads. |
+| Invalid/unexpected API data | Hooks guard with `Array.isArray(...)` before rendering; the orders/cart forms validate shape server-side too (`apps/api/src/routes/orders.ts`). |
+| Event listener cleanup | `useNisumListener` unsubscribes in its `useEffect` cleanup — verified by the unsubscribe test in `libs/events`. |
+| `localStorage` unavailable (private mode, quota) | `@nisum-mfe/state`'s persistence and initial-load paths are wrapped in `try/catch` and log a warning instead of crashing — the app runs correctly with no persistence rather than throwing. |
 
 ## Testing
 
-The project includes an automated test suite across all applications and shared libraries:
+Vitest + Testing Library (+ Supertest for the API) across every workspace — **47 tests, all green** (`npm test`):
 
-```bash
-npm test
-```
+| Workspace | Covers |
+|---|---|
+| `libs/events` | `NISUM.emit`/`listener`, payload delivery, unsubscribe, multi-listener, event isolation |
+| `libs/state` | `cartSlice`/`authSlice` reducers, selectors, store shape |
+| `libs/shared-ui` | `ErrorBoundary` renders children / catches errors / recovers on Retry |
+| `apps/api` | `/api/products`, `/api/orders` — happy path + validation errors, via Supertest against the real Express app |
+| `apps/gateway` | Shell renders, nav switches routes, `RemoteBoundary` shows a loading state / renders the resolved remote / shows a fallback on a rejected import (without needing a live federated remote) |
+| `apps/mfe-product` | Renders the catalog from a mocked API; "Add to cart" both dispatches `addItem` **and** emits `cart:item-added`; API failure shows the error state |
+| `apps/mfe-cart` | Reads cart items from the shared store; highlights a row on `cart:item-added`; blocks checkout when logged out; full checkout emits `order:created` and clears the cart |
+| `apps/mfe-orders` | Prompts to log in when logged out; lists orders for the current user; refetches on `order:created` |
 
-### Test Suites Included:
-- **`libs/events` (`index.test.ts`)**: Verifies `NISUM.emit()`, `NISUM.listener()`, payload delivery, unregister cleanup, and event history recording.
-- **`libs/state` (`index.test.ts`)**: Verifies Zustand store initialization, currency updates, cart counter clamping, and toast management.
-- **`libs/utilities` (`index.test.ts`)**: Verifies currency formatting in USD, EUR, GBP, and environment variable fallbacks.
-- **`apps/api` (`api.test.ts`)**: Supertest integration tests verifying `/api/health`, `/api/products` (filtering & search), cart CRUD operations, and `/api/orders`.
-- **`apps/mfe-product` (`ProductCard.test.tsx`)**: Verifies product card rendering, price formatting, and clicking "Add to Cart" emits `cart:item-added` and updates store.
-- **`apps/mfe-cart` (`CartView.test.tsx`)**: Verifies empty cart rendering, receiving `cart:item-added` events, and displaying line items and totals.
-- **`apps/gateway` (`App.test.tsx`)**: Verifies Gateway shell rendering, view switching, and currency selection.
-
----
+Run everything: `npm test`. Run one workspace: `npm test --workspace=mfe-cart`.
 
 ## CI/CD
 
-Automated CI is implemented using **GitHub Actions** in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
-
-### Pipeline Stages:
-1. **Checkout Code**: Checks out repository.
-2. **Setup Node.js**: Matrix testing across Node.js `20.x` and `22.x`.
-3. **Install Dependencies**: Runs `npm ci`.
-4. **Linting**: Runs `npm run lint` (`eslint --max-warnings=0`).
-5. **Type Checking**: Runs `npm run type-check` (`tsc --noEmit`).
-6. **Automated Tests**: Runs `npm test -- --coverage`.
-7. **Production Builds**: Compiles and bundles all MFEs and backend (`npm run build`).
-
----
+- **CI** (`.github/workflows/ci.yml`, on every push/PR): `npm ci` → `npm run lint` → `npm run typecheck` → `npm test` → `npm run build`, across every workspace.
+- **CD** (`.github/workflows/cd.yml`, on push to `main`): builds the gateway + all three MFEs with production `PUBLIC_PATH`/remote URLs pointed at GitHub Pages subpaths (`/gateway/`, `/mfe-product/`, `/mfe-cart/`, `/mfe-orders/`) and publishes via `peaceiris/actions-gh-pages`. This is genuinely automated for the **frontend** apps. The **backend is not auto-deployed** — see [Deployment](#deployment) for why and what it would take.
 
 ## Environment Configuration
 
-Configuration is managed through environment variables without hardcoded URLs:
+No environment-specific URL is hardcoded anywhere in application code. Every app has a committed `.env.example` and a gitignored `.env`:
 
-| Variable | Default Value | Description |
-|---|---|---|
-| `PORT` | `3000` | Backend API port |
-| `API_URL` | `http://localhost:3000` | URL for backend REST API |
-| `GATEWAY_PORT` | `4200` | Gateway Host port |
-| `MFE_PRODUCT_URL` | `http://localhost:4201` | Product Catalog MFE URL |
-| `MFE_CART_URL` | `http://localhost:4202` | Shopping Cart MFE URL |
-| `CORS_ORIGIN` | `http://localhost:4200,...` | Allowed CORS origins for API |
+| App | Key vars |
+|---|---|
+| `api` | `PORT`, `CORS_ORIGINS` |
+| `gateway` | `PUBLIC_PATH`, `API_URL`, `PRODUCT_MFE_URL`, `CART_MFE_URL`, `ORDERS_MFE_URL` |
+| `mfe-product` | `PUBLIC_PATH`, `API_URL`, `ENABLE_RECOMMENDATIONS` (feature flag) |
+| `mfe-cart` | `PUBLIC_PATH`, `API_URL` |
+| `mfe-orders` | `PUBLIC_PATH`, `API_URL` |
 
-Copy template to create local config:
-```bash
-cp .env.example .env
-```
-
----
+Frontend vars are read at **build time** via webpack `DefinePlugin` (browser code) or directly in `webpack.config.js` via `dotenv` (Node-side config like MF `remotes`/`publicPath`). No secrets exist in this project (mock auth has no passwords/tokens to leak), but the `.gitignore` still excludes real `.env` files on principle.
 
 ## Running the Application
 
-### Prerequisites
-- Node.js `v20.x` or `v22.x`
-- npm `v10.x` or higher
-
-### Single-Command Startup (Rule 7)
-Install dependencies and launch all 4 services concurrently with a single command:
-
 ```bash
 npm install
+cp apps/api/.env.example apps/api/.env
+cp apps/gateway/.env.example apps/gateway/.env
+cp apps/mfe-product/.env.example apps/mfe-product/.env
+cp apps/mfe-cart/.env.example apps/mfe-cart/.env
+cp apps/mfe-orders/.env.example apps/mfe-orders/.env
 npm run dev
 ```
 
-This starts:
-- ✓ **Backend API**: [http://localhost:3000](http://localhost:3000)
-- ✓ **Product Catalog MFE**: [http://localhost:4201](http://localhost:4201)
-- ✓ **Shopping Cart MFE**: [http://localhost:4202](http://localhost:4202)
-- ✓ **Gateway Shell (Main Entry)**: [http://localhost:4200](http://localhost:4200)
+```
+Starting applications...
 
-### Individual App Scripts
-```bash
-npm run dev:gateway    # Starts Gateway Host only (Port 4200)
-npm run dev:product    # Starts Product MFE only (Port 4201)
-npm run dev:cart       # Starts Cart MFE only (Port 4202)
-npm run dev:api        # Starts Backend API only (Port 3000)
+✓ API            http://localhost:4000
+✓ Product MFE    http://localhost:3001
+✓ Cart MFE       http://localhost:3002
+✓ Orders MFE     http://localhost:3003
+✓ Gateway        http://localhost:3000   <- open this one
+
+Application ready.
 ```
 
----
+Equivalent one-liner with Docker (no Node install needed): `docker compose up --build`.
+
+Run one app standalone (e.g. to work on the product catalog in isolation): `npm run dev --workspace=mfe-product` and open `http://localhost:3001` directly.
 
 ## Deployment
 
-### Independent Deployment Strategy
-In production, each MFE is packaged and deployed independently:
-1. **Remotes Deployment (`mfe-product`, `mfe-cart`)**:
-   - Bundled via `npm run build -w @ecommerce/mfe-product`.
-   - Assets and `remoteEntry.js` uploaded to CDN / S3 bucket with CORS headers enabled.
-   - Example URLs: `https://cdn.example.com/mfe-product/remoteEntry.js`.
-2. **Gateway Deployment (`gateway`)**:
-   - Reads remote entry URLs from environment variables (`MFE_PRODUCT_URL`, `MFE_CART_URL`) at build or runtime.
-   - Deployed to modern hosting (Vercel, AWS CloudFront, Nginx).
-3. **Backend API**:
-   - Containerized or deployed to cloud app services (AWS ECS, Render, Railway).
-4. **Zero Downtime Updates**:
-   Because the Gateway dynamically loads `remoteEntry.js` on user requests, updates to `mfe-product` or `mfe-cart` are immediately consumed by users on page load without requiring a redeployment or restart of the Gateway Shell.
-
----
+- **Implemented**: `.github/workflows/cd.yml` builds and publishes the gateway + all three MFEs to GitHub Pages under independent subpaths on every push to `main` — a real, working example of independently-deployable static federated apps served from one static host.
+- **Documented, not automated**: the backend. It needs a process host (Render/Fly.io/Railway/a VM), which needs an account and secrets this repo doesn't have. To wire it up: deploy `apps/api` (its `Dockerfile` already works standalone — `docker build -f apps/api/Dockerfile .`), then set the `API_URL` **repository variable** in GitHub Actions settings to that host's URL so `cd.yml` bakes the right value into the frontend builds.
+- **Local, containerized**: `docker-compose.yml` builds and runs all five services from clean images — gateway/MFEs as multi-stage builds (Node → static assets served by `nginx`), API as a Node runtime image. This is the fastest way to prove the whole platform boots from nothing but Docker.
 
 ## Architecture Decisions
 
-### ADR 1: Webpack 5 Module Federation as Core Federation Technology
-- **Context**: Need runtime composition of independent React micro frontends.
-- **Decision**: Used Webpack 5 `ModuleFederationPlugin`.
-- **Rationale**: Industry standard for enterprise micro frontends, robust singleton dependency sharing (`react`, `react-dom`, `zustand`), and dynamic remote loading at runtime.
-
-### ADR 2: Browser CustomEvents for Asynchronous Cross-MFE Communication
-- **Context**: Need decoupled communication where Product MFE notifies Cart MFE.
-- **Decision**: Implemented `window.NISUM` event bus using browser `CustomEvent`.
-- **Rationale**: MFEs remain completely agnostic of each other. No direct package imports between MFEs, preventing tight coupling.
-
-### ADR 3: Zustand for Reactive Shared Application State
-- **Context**: Currency, active user session, and cart total badge count need synchronous reactive sharing across the Gateway and MFEs.
-- **Decision**: Configured `@ecommerce/state` with Zustand shared as a singleton module.
-- **Rationale**: Minimal footprint (< 2KB), works seamlessly across Module Federation boundaries, and allows components to re-render only when selected state slices change.
-
-### ADR 4: Centralized Error Boundaries per Remote MFE
-- **Context**: A failure in one remote must not crash the entire application.
-- **Decision**: Created `RemoteBoundary` wrapping each `React.lazy()` import.
-- **Rationale**: Isolates failures. If the Cart MFE is temporarily down, the customer can still browse the product catalog and view architecture diagnostics.
-
----
+- **npm workspaces over Nx.** Nx is recommended by the brief, but every prior assignment in this training used plain npm workspaces + webpack, and this project's dependency graph (5 apps, 5 libs, one shared version of everything) doesn't need Nx's task-graph caching or generators to stay manageable. Trade-off: no built-in affected-project detection in CI — `npm run build` always builds everything, which is fine at this scale but wouldn't be at 50 apps.
+- **Libraries consumed from source, not pre-built `dist`.** Avoids a "did you remember to rebuild `shared` first" class of bug (which Assignment 2's `build:shared` script existed to paper over) at the cost of every app's webpack having to transpile a few extra `node_modules/@nisum-mfe/*` files — a deliberate, explicit trade in the babel-loader `exclude` regex.
+- **Exposed remote = pure component, not a mounted app.** Keeps the Provider/store wiring in exactly one place per "mode" (federated vs. standalone `bootstrap.tsx`) instead of every remote needing to detect which mode it's in at runtime.
+- **Mock authentication, not real auth.** Implementing real session/token auth was out of scope for what this project is trying to demonstrate (cross-MFE state/event sharing); the mock still exercises the real thing this project cares about — "current user" as genuine shared state read by two independent MFEs — without a password/token surface that would need to be threaded through every app for no pedagogical benefit.
+- **Cart is Redux + `localStorage`, not a backend resource.** The cart is inherently client/session state until checkout; treating it as backend-of-record would mean a network round-trip for every quantity change. Orders (once placed) *are* backend-of-record, which is the actual point where "shared state" should stop being the source of truth — see the Data-Sharing table.
+- **In-memory backend data, no database.** Keeps the whole project runnable with zero external services. Documented explicitly as a trade-off, not hidden: restarting `apps/api` resets all orders.
+- **CD deploys the frontend only.** See [Deployment](#deployment) — automating a backend deploy would require secrets/accounts this repo doesn't have; documenting the gap honestly was judged better than faking it with a workflow that can't actually succeed.
 
 ## Challenges & Solutions
 
-1. **Challenge: TypeScript path resolution across monorepo packages**
-   - *Problem*: Webpack `ts-loader` threw `TS6059` when importing shared types and components outside the application's root directory.
-   - *Solution*: Configured `tsconfig.base.json` with universal path aliases (`@ecommerce/*`) and included `libs/**/*` in the application tsconfigs while omitting restrictive `rootDir` definitions.
-2. **Challenge: Cross-MFE React singleton collision**
-   - *Problem*: In Module Federation, multiple instances of React loaded by host and remotes can cause "Invalid hook call" errors.
-   - *Solution*: Configured `react` and `react-dom` as `{ singleton: true, requiredVersion: '^18.3.1', eager: false }` in all Module Federation plugins, ensuring a single shared React instance in browser memory.
-3. **Challenge: Event listener memory leaks**
-   - *Problem*: Component re-renders could register duplicate listeners on `window`.
-   - *Solution*: `NISUM.listener()` returns an unsubscribe function called in `useEffect` cleanups.
-
----
+- **`import './global'` (a `.d.ts`-only file) broke Vite's test resolver**, even though `tsc` compiled it fine (ambient global augmentation files aren't real runtime modules). Fixed by switching to a `/// <reference path="./global.d.ts" />` triple-slash directive in `eventBus.ts` — compile-time-only inclusion, no runtime import for the bundler to choke on.
+- **Testing federated remotes that don't exist at test time.** The gateway's tests can't literally resolve `import('mfeProduct/ProductApp')` (Module Federation only resolves that at runtime via webpack). Solved two ways: (1) `App.test.tsx` mocks the local `../remotes` module rather than the federation-only specifiers, and (2) `RemoteBoundary.test.tsx` tests the actual loading/error/success states directly against a hand-built `React.lazy` component, independent of Module Federation entirely.
+- **Node 22+'s native `localStorage` global shadowed jsdom's in Vitest**, causing `window.localStorage.clear is not a function` in component tests. Rather than fight the test environment, this surfaced a real gap worth having anyway: `@nisum-mfe/state`'s persistence code now degrades gracefully (try/catch + a warning log) instead of assuming `localStorage` is always fully functional — which is also correct behavior for private-browsing/quota-exceeded cases in real browsers.
+- **Keeping "shared state" and "events" from overlapping into the same responsibility.** Early draft had the cart-added notification also live in Redux (a `notifications` array). Moved it to a pure NISUM event once it became clear nothing needed to *query* "was an item just added" after the fact — only react to it once. That's the dividing line documented in the [Data-Sharing Strategy](#data-sharing-strategy) table.
 
 ## Screenshots / Demo
 
-### 1. Gateway Shell & Product Catalog (MFE 1)
-- Host header with branding, user profile, currency selector, and cart badge.
-- Interactive catalog loaded from `mfe-product` with category filter buttons and "Add to Cart" actions.
+All captured from a live run of `npm run dev` against a headless Chromium session (Playwright), with zero console errors throughout.
 
-### 2. Shopping Cart (MFE 2) & Checkout
-- Cart items dynamically added via `window.NISUM` events.
-- Order summary with subtotal, tax, free shipping, and checkout receipt.
+**Gateway loading all three federated remotes** (Product Catalog is the default route):
+![Gateway with product catalog](docs/screenshots/01-gateway-products.png)
 
-### 3. Architecture & Health Inspector
-- Built-in live topology dashboard showing active host and remotes.
-- Real-time `window.NISUM` event stream log and data-sharing strategy comparison matrix.
+**Mock login** (dispatches into `authSlice`, emits `user:login`):
+![Logged in as Ava Chen](docs/screenshots/02-logged-in.png)
 
----
+**Add to cart** — dispatches `addItem` and emits `cart:item-added` in the same click:
+![Toast notification after add to cart](docs/screenshots/03-after-add-to-cart.png)
+
+**Cart MFE reading the shared store** (item added from the *Product* MFE, rendered by the *Cart* MFE):
+![Cart page showing the added item](docs/screenshots/04-cart-page.png)
+
+**Checkout** — `POST /api/orders`, then `order:created` is emitted:
+![Order confirmed](docs/screenshots/05-checkout-confirmed.png)
+
+**Orders MFE receiving `order:created`** from the Cart MFE and refetching automatically:
+![Order history showing the new order](docs/screenshots/06-orders-page.png)
 
 ## Future Improvements
 
-1. **Server-Side Rendering (SSR)**: Implement Next.js or Module Federation SSR for enhanced SEO on product detail pages.
-2. **Client-Side Cache Layer**: Integrate React Query or SWR in shared utilities for optimistic UI updates.
-3. **Advanced Telemetry**: Centralized OpenTelemetry tracing across Gateway, MFEs, and Backend API.
-
----
+- Emit `cart:item-removed`/`cart:updated` (types already reserved in `NisumEventMap`) and have the gateway's badge animate off them, for full parity with the add-side events.
+- Replace mock auth with real sessions (JWT + httpOnly cookie) once there's an actual reason to protect a route server-side.
+- Nx (or Turborepo) if this grows past ~10 apps and CI build time starts to matter — the workspace boundaries already drawn here would translate directly into Nx project boundaries.
+- A persisted-order backend (real DB) instead of in-memory, so `apps/api` restarts don't lose order history.
+- Automate the backend deploy in `cd.yml` once a target host/account is available (see [Deployment](#deployment)).
 
 ## Conclusion
 
-This project demonstrates a production-oriented, scalable, and resilient Micro Frontend platform. By combining **Module Federation**, **decoupled event-driven messaging (`window.NISUM`)**, **reactive shared state (Zustand)**, and **comprehensive error boundaries**, the platform provides a blueprint for large engineering organizations to build and maintain independent frontends that work seamlessly as one unified product.
+Every requirement in the brief maps to a specific, running piece of this repo rather than a description of one: the gateway really does compose three separately-built remotes at runtime and really does degrade gracefully when one is down; the cart really is one Redux store instance shared by three apps, not three copies; `window.NISUM` really is reachable from the browser console and really is what connects the Product, Cart, and Orders MFEs; and the whole thing is provable in one command (`npm run dev` or `docker compose up`) rather than only in prose.

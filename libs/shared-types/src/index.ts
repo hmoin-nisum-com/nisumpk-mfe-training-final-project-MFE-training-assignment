@@ -1,146 +1,61 @@
-/**
- * Product Interface representing e-commerce catalog items
- */
+// Domain types shared across every app in the monorepo. Kept dependency-free
+// (no React/Redux imports here) so every workspace - frontend or backend - can
+// depend on it without pulling in unrelated tooling.
+
 export interface Product {
   id: string;
   name: string;
   description: string;
-  price: number; // Base price in USD
-  category: 'Electronics' | 'Wearables' | 'Audio' | 'Accessories';
-  rating: number;
-  stock: number;
+  price: number;
+  category: string;
   image: string;
-  badge?: string;
-  featured?: boolean;
+  stock: number;
 }
 
-/**
- * Item present in the shopping cart
- */
 export interface CartItem {
-  id: string;
   productId: string;
   name: string;
-  price: number; // Base price in USD
+  price: number;
   quantity: number;
-  image: string;
-  category: string;
+  image?: string;
 }
 
-/**
- * Calculated order & cart summary
- */
-export interface CartSummary {
-  items: CartItem[];
-  totalItems: number;
-  subtotal: number;
-  tax: number;
-  shipping: number;
-  discount: number;
-  total: number;
-}
+export type OrderStatus = 'pending' | 'confirmed';
 
-/**
- * Customer order confirmation
- */
 export interface Order {
   id: string;
+  userId: string;
   items: CartItem[];
-  totalAmount: number;
-  currency: Currency;
-  status: 'confirmed' | 'processing' | 'shipped';
+  total: number;
+  status: OrderStatus;
   createdAt: string;
-  customer: {
-    name: string;
-    email: string;
-    shippingAddress: string;
-  };
 }
 
-/**
- * Supported global currencies
- */
-export type Currency = 'USD' | 'EUR' | 'GBP';
-
-/**
- * Global application toast notification
- */
-export interface AppNotification {
+export interface User {
   id: string;
+  name: string;
+  email: string;
+}
+
+export interface ApiErrorBody {
+  error: string;
   message: string;
-  type: 'success' | 'info' | 'warning' | 'error';
-  timestamp: number;
-  duration?: number;
 }
 
 /**
- * Generic API response envelope
- */
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-}
-
-/**
- * Payloads for the NISUM Event-Driven Architecture
- */
-export interface CartItemAddedPayload {
-  product: Product;
-  quantity: number;
-  timestamp: number;
-}
-
-export interface CartUpdatedPayload {
-  items: CartItem[];
-  totalItems: number;
-  totalAmount: number;
-}
-
-export interface OrderCreatedPayload {
-  order: Order;
-}
-
-export interface NotificationShowPayload {
-  message: string;
-  type?: 'success' | 'info' | 'warning' | 'error';
-  duration?: number;
-}
-
-export interface CurrencyChangedPayload {
-  currency: Currency;
-  rate: number;
-}
-
-/**
- * Type-safe map of all supported global event names to their payload types
+ * Compile-time contract for the NISUM window event bus (see @nisum-mfe/events).
+ * Every event name emitted or listened to across the platform must be a key
+ * here so `NISUM.emit`/`NISUM.listener` stay type-safe end to end.
  */
 export interface NisumEventMap {
-  'cart:item-added': CartItemAddedPayload;
-  'cart:updated': CartUpdatedPayload;
-  'order:created': OrderCreatedPayload;
-  'notification:show': NotificationShowPayload;
-  'currency:changed': CurrencyChangedPayload;
-  [customEvent: string]: any;
+  'cart:item-added': { productId: string; name: string; quantity: number; price: number };
+  'cart:item-removed': { productId: string };
+  'cart:updated': { totalItems: number; totalPrice: number };
+  'product:selected': { productId: string; name: string };
+  'order:created': { orderId: string; total: number; itemCount: number };
+  'user:login': User;
+  'user:logout': Record<string, never>;
+  'notification:show': { message: string; level: 'info' | 'success' | 'error' | 'warning' };
 }
 
-/**
- * Global Event Bus interface attached to window.NISUM
- */
-export interface NisumEventBus {
-  emit<K extends keyof NisumEventMap>(event: K, payload?: NisumEventMap[K]): void;
-  emit(event: string, payload?: any): void;
-  listener<K extends keyof NisumEventMap>(
-    event: K,
-    handler: (payload: NisumEventMap[K]) => void
-  ): () => void;
-  listener(event: string, handler: (payload: any) => void): () => void;
-  getHistory?(): Array<{ event: string; payload: any; timestamp: number }>;
-}
-
-declare global {
-  interface Window {
-    NISUM?: NisumEventBus;
-  }
-}
+export type NisumEventName = keyof NisumEventMap;
