@@ -1,52 +1,42 @@
-import { Router, Request, Response } from 'express';
-import { Order, ApiResponse } from '@ecommerce/shared-types';
+import { Router } from 'express';
+import type { CartItem } from '@nisum-mfe/shared-types';
+import { createOrder, listOrdersByUser } from '../data/ordersStore';
+import { HttpError } from '../middleware/errorHandler';
 
 export const ordersRouter = Router();
 
-const orders: Order[] = [];
+function isValidItems(items: unknown): items is CartItem[] {
+  return (
+    Array.isArray(items) &&
+    items.length > 0 &&
+    items.every(
+      (item: any) =>
+        item &&
+        typeof item.productId === 'string' &&
+        typeof item.name === 'string' &&
+        typeof item.price === 'number' &&
+        typeof item.quantity === 'number' &&
+        item.quantity > 0,
+    )
+  );
+}
 
-// POST /api/orders
-ordersRouter.post('/', (req: Request, res: Response) => {
-  const { items, totalAmount, customer, currency = 'USD' } = req.body;
-
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    const response: ApiResponse<null> = {
-      success: false,
-      error: 'Cannot place order with an empty cart.'
-    };
-    return res.status(400).json(response);
+ordersRouter.get('/', (req, res) => {
+  const userId = req.query.userId;
+  if (typeof userId !== 'string' || !userId) {
+    throw new HttpError(400, 'invalid_request', 'Query param "userId" is required.');
   }
-
-  const newOrder: Order = {
-    id: `ord_${Date.now()}_${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-    items,
-    totalAmount: Number(totalAmount) || 0,
-    currency,
-    status: 'confirmed',
-    createdAt: new Date().toISOString(),
-    customer: customer || {
-      name: 'Alex Morgan',
-      email: 'alex.morgan@nisum.com',
-      shippingAddress: '789 Nisum Way, Silicon Valley, CA'
-    }
-  };
-
-  orders.unshift(newOrder);
-
-  const response: ApiResponse<Order> = {
-    success: true,
-    data: newOrder,
-    message: 'Order created and confirmed successfully.'
-  };
-
-  res.status(201).json(response);
+  res.json(listOrdersByUser(userId));
 });
 
-// GET /api/orders
-ordersRouter.get('/', (req: Request, res: Response) => {
-  const response: ApiResponse<Order[]> = {
-    success: true,
-    data: orders
-  };
-  res.json(response);
+ordersRouter.post('/', (req, res) => {
+  const { userId, items } = req.body ?? {};
+  if (typeof userId !== 'string' || !userId) {
+    throw new HttpError(400, 'invalid_request', 'Field "userId" is required.');
+  }
+  if (!isValidItems(items)) {
+    throw new HttpError(400, 'invalid_request', 'Field "items" must be a non-empty array of cart items.');
+  }
+  const order = createOrder(userId, items);
+  res.status(201).json(order);
 });

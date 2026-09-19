@@ -1,81 +1,76 @@
-import React from 'react';
-import { CartView } from './components/CartView';
-import { useAppStore } from '@ecommerce/state';
-import { Currency } from '@ecommerce/shared-types';
-import '@ecommerce/shared-ui';
+import React, { useState } from 'react';
+import { Button, ErrorPanel } from '@nisum-mfe/shared-ui';
+import {
+  clearCart,
+  selectCartItems,
+  selectCartTotalPrice,
+  selectUser,
+  useAppDispatch,
+  useAppSelector,
+} from '@nisum-mfe/state';
+import { NISUM, useNisumListener } from '@nisum-mfe/events';
+import { formatCurrency } from '@nisum-mfe/utilities';
+import { CartItemRow } from './components/CartItemRow';
+import { useCheckout } from './hooks/useCheckout';
 
-export const App: React.FC = () => {
-  const currency = useAppStore((state) => state.currency);
-  const setCurrency = useAppStore((state) => state.setCurrency);
-  const user = useAppStore((state) => state.user);
+/**
+ * Exposed as `mfeCart/CartApp`. Demonstrates BOTH data-sharing mechanisms on
+ * the receiving end: it reads the cart directly from the shared Redux store
+ * (state sharing) and separately listens for `cart:item-added` (event
+ * sharing) purely to briefly highlight the row that was just added - a
+ * concern the store itself has no reason to know about.
+ */
+export default function App() {
+  const items = useAppSelector(selectCartItems);
+  const total = useAppSelector(selectCartTotalPrice);
+  const user = useAppSelector(selectUser);
+  const dispatch = useAppDispatch();
+  const { submitOrder, status, error } = useCheckout();
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<string | null>(null);
+
+  useNisumListener('cart:item-added', ({ productId }) => {
+    setHighlighted(productId);
+    setTimeout(() => setHighlighted((current) => (current === productId ? null : current)), 1500);
+  });
+
+  const handleCheckout = async (): Promise<void> => {
+    if (!user || items.length === 0) return;
+    try {
+      const order = await submitOrder(user.id, items);
+      dispatch(clearCart());
+      setConfirmation(`Order ${order.id} confirmed - thank you!`);
+      NISUM.emit('order:created', { orderId: order.id, total: order.total, itemCount: items.length });
+      NISUM.emit('notification:show', { message: `Order ${order.id} placed!`, level: 'success' });
+    } catch {
+      // `error` from useCheckout already reflects the failure in the UI below
+    }
+  };
+
+  if (items.length === 0) {
+    return (
+      <div>
+        <h2>Your Cart</h2>
+        <p>{confirmation ?? 'Your cart is empty. Add some products first!'}</p>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px' }}>
-      <header
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '16px 24px',
-          backgroundColor: 'var(--color-bg-card)',
-          borderRadius: 'var(--border-radius-lg)',
-          border: '1px solid var(--color-border)',
-          marginBottom: '32px'
-        }}
-      >
-        <div>
-          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-secondary)', textTransform: 'uppercase' }}>
-            Standalone MFE 2 (Port 4202)
-          </span>
-          <h1 style={{ margin: '4px 0 0 0', fontSize: '1.5rem', fontWeight: 700 }}>
-            Shopping Cart Micro Frontend
-          </h1>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div>
-            <label style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginRight: '8px' }}>
-              Currency:
-            </label>
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value as Currency)}
-              style={{
-                backgroundColor: 'var(--color-bg-main)',
-                color: 'var(--color-text-main)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '6px',
-                padding: '6px 12px',
-                fontSize: '0.85rem'
-              }}
-            >
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="GBP">GBP (£)</option>
-            </select>
-          </div>
-
-          <div
-            style={{
-              padding: '6px 14px',
-              backgroundColor: 'rgba(14, 165, 233, 0.15)',
-              borderRadius: '999px',
-              border: '1px solid rgba(14, 165, 233, 0.4)',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              color: '#7dd3fc'
-            }}
-          >
-            User: {user.name}
-          </div>
-        </div>
-      </header>
-
-      <main>
-        <CartView />
-      </main>
+    <div>
+      <h2>Your Cart</h2>
+      {items.map((item) => (
+        <CartItemRow key={item.productId} item={item} highlighted={item.productId === highlighted} />
+      ))}
+      <div style={{ display: 'flex', justifyContent: 'space-between', margin: '16px 0', fontSize: 18 }}>
+        <strong>Total</strong>
+        <strong>{formatCurrency(total)}</strong>
+      </div>
+      {!user && <ErrorPanel title="Login required" message="Log in from the header to check out." />}
+      {error && <ErrorPanel message={error} />}
+      <Button onClick={handleCheckout} disabled={!user || status === 'submitting'}>
+        {status === 'submitting' ? 'Placing order...' : 'Checkout'}
+      </Button>
     </div>
   );
-};
-
-export default App;
+}
